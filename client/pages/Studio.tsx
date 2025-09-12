@@ -2074,6 +2074,235 @@ function Inspector({
             </AccordionContent>
           </AccordionItem>
         )}
+
+        {/* 表单组件配置 */}
+        {["Input", "Textarea", "Switch", "Slider", "Select", "Transfer", "Upload"].includes(local.type) && (
+          <AccordionItem value="form-config">
+            <AccordionTrigger className="text-sm font-medium">
+              表单配置
+            </AccordionTrigger>
+            <AccordionContent className="space-y-3">
+              <div className="grid gap-2">
+                <label className="text-xs">字段标签</label>
+                <Input 
+                  value={local.props?.label ?? ""} 
+                  onChange={(e) => set("label", e.target.value)} 
+                  placeholder="请输入字段标签"
+                />
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <Switch 
+                  id="required" 
+                  checked={local.props?.required === true} 
+                  onCheckedChange={(checked) => set("required", checked)} 
+                />
+                <label htmlFor="required" className="text-xs">必填字段</label>
+              </div>
+              
+              {local.type === "Input" && (
+                <>
+                  <div className="grid gap-2">
+                    <label className="text-xs">占位符</label>
+                    <Input 
+                      value={local.props?.placeholder ?? ""} 
+                      onChange={(e) => set("placeholder", e.target.value)} 
+                      placeholder="请输入占位符文本"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-xs">默认值</label>
+                    <Input 
+                      value={local.props?.defaultValue ?? ""} 
+                      onChange={(e) => set("defaultValue", e.target.value)} 
+                      placeholder="请输入默认值"
+                    />
+                  </div>
+                </>
+              )}
+              
+              {local.type === "Textarea" && (
+                <>
+                  <div className="grid gap-2">
+                    <label className="text-xs">占位符</label>
+                    <Input 
+                      value={local.props?.placeholder ?? ""} 
+                      onChange={(e) => set("placeholder", e.target.value)} 
+                      placeholder="请输入占位符文本"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-xs">默认值</label>
+                    <Textarea 
+                      value={local.props?.defaultValue ?? ""} 
+                      onChange={(e) => set("defaultValue", e.target.value)} 
+                      placeholder="请输入默认值"
+                      rows={3}
+                    />
+                  </div>
+                </>
+              )}
+              
+              {local.type === "Switch" && (
+                <>
+                  <div className="grid gap-2">
+                    <label className="text-xs">开关标题</label>
+                    <Input 
+                      value={local.props?.title ?? ""} 
+                      onChange={(e) => set("title", e.target.value)} 
+                      placeholder="请输入开关标题"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Switch 
+                      id="defaultChecked" 
+                      checked={local.props?.checked === true} 
+                      onCheckedChange={(checked) => set("checked", checked)} 
+                    />
+                    <label htmlFor="defaultChecked" className="text-xs">默认选中</label>
+                  </div>
+                </>
+              )}
+              
+              {local.type === "Select" && (
+                <>
+                  <div className="grid gap-2">
+                    <label className="text-xs">占位符</label>
+                    <Input 
+                      value={local.props?.placeholder ?? ""} 
+                      onChange={(e) => set("placeholder", e.target.value)} 
+                      placeholder="请选择..."
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-xs">选项配置 (JSON)</label>
+                    <Textarea 
+                      value={JSON.stringify(local.props?.options ?? [], null, 2)} 
+                      onChange={(e) => {
+                        try {
+                          const options = JSON.parse(e.target.value);
+                          set("options", options);
+                        } catch (err) {
+                          // 忽略JSON解析错误
+                        }
+                      }} 
+                      placeholder='[{"value": "option1", "label": "选项1"}]'
+                      rows={4}
+                    />
+                  </div>
+                </>
+              )}
+              
+              {local.type === "Upload" && (
+                <>
+                  <div className="grid gap-2">
+                    <label className="text-xs">接受的文件类型</label>
+                    <Input 
+                      value={local.props?.accept ?? ""} 
+                      onChange={(e) => set("accept", e.target.value)} 
+                      placeholder=".jpg,.png,.pdf"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Switch 
+                      id="multiple" 
+                      checked={local.props?.multiple === true} 
+                      onCheckedChange={(checked) => set("multiple", checked)} 
+                    />
+                    <label htmlFor="multiple" className="text-xs">允许多选</label>
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-xs">最大文件数</label>
+                    <Input 
+                      type="number"
+                      value={local.props?.maxCount ?? 1} 
+                      onChange={(e) => set("maxCount", Number(e.target.value))} 
+                    />
+                  </div>
+                </>
+              )}
+            </AccordionContent>
+          </AccordionItem>
+        )}
+
+        {local.type === "Tree" && (
+          <AccordionItem value="tree-config">
+            <AccordionTrigger className="text-sm font-medium">
+              树形组件配置
+            </AccordionTrigger>
+            <AccordionContent className="space-y-3">
+              <div className="grid gap-2">
+                <label className="text-xs">树形数据</label>
+                <Textarea 
+                  value={JSON.stringify(local.props?.data ?? [], null, 2)} 
+                  onChange={(e) => {
+                    try {
+                      const data = JSON.parse(e.target.value);
+                      set("data", data);
+                    } catch (err) {
+                      // 忽略JSON解析错误
+                    }
+                  }} 
+                  placeholder='[{"id": "1", "label": "节点1", "children": []}]'
+                  rows={6}
+                />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-xs">展开的节点</label>
+                <Input 
+                  value={(local.props?.expandedKeys ?? []).join(",")} 
+                  onChange={(e) => set("expandedKeys", e.target.value.split(",").filter(Boolean))} 
+                  placeholder="1,2,3" 
+                />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-xs">选中的节点</label>
+                <Input 
+                  value={(local.props?.selectedKeys ?? []).join(",")} 
+                  onChange={(e) => set("selectedKeys", e.target.value.split(",").filter(Boolean))} 
+                  placeholder="1,2" 
+                />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-xs">勾选的节点</label>
+                <Input 
+                  value={(local.props?.checkedKeys ?? []).join(",")} 
+                  onChange={(e) => set("checkedKeys", e.target.value.split(",").filter(Boolean))} 
+                  placeholder="1,3" 
+                />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-xs">高度</label>
+                <Input 
+                  value={local.props?.height ?? ""} 
+                  onChange={(e) => set("height", e.target.value)} 
+                  placeholder="400px" 
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <label className="text-xs">显示复选框</label>
+                <Switch 
+                  checked={local.props?.checkable ?? false} 
+                  onCheckedChange={(checked) => set("checkable", checked)} 
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <label className="text-xs">多选模式</label>
+                <Switch 
+                  checked={local.props?.multiple ?? false} 
+                  onCheckedChange={(checked) => set("multiple", checked)} 
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <label className="text-xs">显示连接线</label>
+                <Switch 
+                  checked={local.props?.showLine ?? true} 
+                  onCheckedChange={(checked) => set("showLine", checked)} 
+                />
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        )}
       </Accordion>
     </div>
   );
@@ -2099,6 +2328,8 @@ export default function Studio() {
   const [editingComponent, setEditingComponent] = useState<CustomComponent | null>(null);
   const [editComponentName, setEditComponentName] = useState("");
   const [editComponentDescription, setEditComponentDescription] = useState("");
+  const [componentSearchTerm, setComponentSearchTerm] = useState("");
+  const [accordionValue, setAccordionValue] = useState<string[]>([]);
 
   const commit = (next: PageMeta) => {
     setHistory((h) => [...h, page]);
@@ -2540,6 +2771,7 @@ export default function Studio() {
     Transfer: "fas fa-exchange-alt",
     Upload: "fas fa-upload",
     Iframe: "fas fa-external-link-alt",
+    Tree: "fas fa-sitemap",
     
     // 功能组件
     Listener: "fas fa-headphones",
@@ -2596,6 +2828,7 @@ export default function Studio() {
       { key: "Transfer", label: "穿梭框" },
       { key: "Upload", label: "文件上传" },
       { key: "Iframe", label: "内嵌框架" },
+      { key: "Tree", label: "树形组件" },
     ],
     "功能组件": [
       { key: "Listener", label: "事件监听器" },
@@ -2611,6 +2844,73 @@ export default function Studio() {
     walk(root);
     return out;
   };
+
+  // 过滤组件分组
+  const filteredComponentGroups = useMemo(() => {
+    if (!componentSearchTerm.trim()) {
+      return componentGroups;
+    }
+    
+    const searchTerm = componentSearchTerm.toLowerCase();
+    const filtered: typeof componentGroups = {
+      "布局组件": [],
+      "表单组件": [],
+      "展示组件": [],
+      "交互组件": [],
+      "导航组件": [],
+      "数据组件": [],
+      "功能组件": []
+    };
+    
+    Object.entries(componentGroups).forEach(([groupName, components]) => {
+      const filteredComponents = components.filter(component => 
+        component.label.toLowerCase().includes(searchTerm) ||
+        component.key.toLowerCase().includes(searchTerm)
+      );
+      
+      if (filteredComponents.length > 0) {
+        filtered[groupName as keyof typeof componentGroups] = filteredComponents;
+      }
+    });
+    
+    return filtered;
+  }, [componentSearchTerm]);
+
+  // 过滤自建组件
+  const filteredCustomComponents = useMemo(() => {
+    if (!componentSearchTerm.trim()) {
+      return customComponents;
+    }
+    
+    const searchTerm = componentSearchTerm.toLowerCase();
+    return customComponents.filter(component => 
+      component.name.toLowerCase().includes(searchTerm) ||
+      (component.description && component.description.toLowerCase().includes(searchTerm))
+    );
+  }, [customComponents, componentSearchTerm]);
+
+  // 根据搜索结果自动展开手风琴
+  useEffect(() => {
+    if (componentSearchTerm.trim()) {
+      const expandedItems: string[] = [];
+      
+      // 检查自建组件是否有结果
+      if (filteredCustomComponents.length > 0) {
+        expandedItems.push("自建组件");
+      }
+      
+      // 检查各个组件分类是否有结果
+      Object.entries(filteredComponentGroups).forEach(([groupName, components]) => {
+        if (components.length > 0) {
+          expandedItems.push(groupName);
+        }
+      });
+      
+      setAccordionValue(expandedItems);
+    } else {
+      setAccordionValue([]);
+    }
+  }, [componentSearchTerm, filteredCustomComponents, filteredComponentGroups]);
 
   const addByKey = (key: string) => {
     const nearestContainer = (start: NodeMeta | null): NodeMeta => {
@@ -2661,7 +2961,7 @@ export default function Studio() {
           </TabsList>
           
           <TabsContent value="layouts" className="mt-3">
-            <Accordion type="multiple" className="w-full">
+            <Accordion type="multiple" className="w-full" value={accordionValue} onValueChange={setAccordionValue}>
               {Object.entries(layoutTemplates).map(([groupName, templates]) => (
                 <AccordionItem key={groupName} value={groupName}>
                   <AccordionTrigger className="text-sm font-medium">
@@ -2689,20 +2989,39 @@ export default function Studio() {
           </TabsContent>
           
           <TabsContent value="components" className="mt-3">
-            <Accordion type="multiple" className="w-full">
+            {/* 搜索输入框 */}
+            <div className="mb-3">
+              <Input
+                placeholder="搜索组件..."
+                value={componentSearchTerm}
+                onChange={(e) => setComponentSearchTerm(e.target.value)}
+                className="h-8 text-sm"
+              />
+            </div>
+            
+            <Accordion type="multiple" className="w-full" value={accordionValue} onValueChange={setAccordionValue}>
+              {/* 搜索结果为空提示 */}
+              {componentSearchTerm.trim() && Object.keys(filteredComponentGroups).length === 0 && filteredCustomComponents.length === 0 && (
+                <div className="text-center py-8 text-muted-foreground">
+                  <div className="text-sm">未找到匹配的组件</div>
+                  <div className="text-xs mt-1">请尝试其他关键词</div>
+                </div>
+              )}
+              
               {/* 自建组件分类 */}
-              <AccordionItem value="custom-components">
+              {(!componentSearchTerm.trim() || filteredCustomComponents.length > 0) && (
+                <AccordionItem value="自建组件">
                 <AccordionTrigger className="text-sm font-medium">
                   自建组件
                 </AccordionTrigger>
                 <AccordionContent>
                   <div className="grid gap-2">
-                    {customComponents.length === 0 ? (
+                    {filteredCustomComponents.length === 0 ? (
                       <div className="text-xs text-muted-foreground p-2 text-center">
-                        暂无自建组件
+                        {componentSearchTerm.trim() ? '未找到匹配的自建组件' : '暂无自建组件'}
                       </div>
                     ) : (
-                      customComponents.map((component) => (
+                      filteredCustomComponents.map((component) => (
                         <div
                           key={component.id}
                           className="group flex items-center rounded border p-2 text-xs hover:bg-accent gap-2"
@@ -2751,10 +3070,11 @@ export default function Studio() {
                     )}
                   </div>
                 </AccordionContent>
-              </AccordionItem>
+                </AccordionItem>
+              )}
               
               {/* 原有组件分类 */}
-              {Object.entries(componentGroups).map(([groupName, components]) => (
+              {Object.entries(filteredComponentGroups).map(([groupName, components]) => (
                 <AccordionItem key={groupName} value={groupName}>
                   <AccordionTrigger className="text-sm font-medium">
                     {groupName}

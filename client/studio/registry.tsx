@@ -27,11 +27,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Transfer } from "./components/ui/transfer";
 import { Upload } from "./components/ui/upload";
 import { Iframe } from "./components/ui/iframe";
+import { Tree } from "./components/ui/tree";
+import { FormLabel } from "./components/ui/form-label";
+import { SubmitButton } from "./components/ui/submit-button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { ArrowUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { bus } from "@/lib/eventBus";
 import { execHandler } from "@/lib/handlers";
+import { formValidationManager } from "./form-validation";
 import type { NodeMeta } from "./types";
 
 // 检查节点是否在锁定容器内
@@ -332,33 +336,171 @@ export const registry: Record<string, Renderer> = {
     );
   },
   Badge: (node) => <Badge>{node.props?.text ?? "Badge"}</Badge>,
-  Input: (node) => <Input placeholder={node.props?.placeholder ?? "请输入..."} className={node.props?.className} />,
-  Textarea: (node) => <Textarea placeholder={node.props?.placeholder ?? "请输入..."} className={node.props?.className} />,
-  Switch: (node) => (
-    <div className="flex items-center space-x-2">
-      <Switch 
-        defaultChecked={!!node.props?.checked} 
-        disabled={!!node.props?.disabled}
-        onCheckedChange={(checked) => {
-          // 触发事件处理
-          if (node.props?.events) {
-            (node.props.events as any[]).forEach((event) => {
-              if (event.type === "onChange") {
-                execHandler(event.handler, { checked, ...event.params });
+  Input: (node) => {
+    const [value, setValue] = useState(node.props?.defaultValue || '');
+    
+    useEffect(() => {
+      if (node.props?.required) {
+        formValidationManager.registerField(node.id, 'value', true);
+        formValidationManager.updateFieldValue(node.id, 'value', value);
+      }
+    }, [value, node.id, node.props?.required]);
+    
+    return (
+      <FormLabel 
+        label={node.props?.label} 
+        required={node.props?.required}
+        className={node.props?.labelClassName}
+        nodeId={node.id}
+        fieldName="value"
+      >
+        <Input 
+          placeholder={node.props?.placeholder ?? "请输入..."} 
+          className={node.props?.className}
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value);
+            if (node.props?.events) {
+              (node.props.events as any[]).forEach((event) => {
+                if (event.type === "onChange") {
+                  execHandler(event.handler, { value: e.target.value, ...event.params });
+                }
+              });
+            }
+          }}
+          onBlur={() => {
+            if (node.props?.required) {
+              formValidationManager.markFieldBlurred(node.id, 'value');
+            }
+          }}
+        />
+      </FormLabel>
+    );
+  },
+  Textarea: (node) => {
+    const [value, setValue] = useState(node.props?.defaultValue || '');
+    
+    useEffect(() => {
+      if (node.props?.required) {
+        formValidationManager.registerField(node.id, 'value', true);
+        formValidationManager.updateFieldValue(node.id, 'value', value);
+      }
+    }, [value, node.id, node.props?.required]);
+    
+    return (
+      <FormLabel 
+        label={node.props?.label} 
+        required={node.props?.required}
+        className={node.props?.labelClassName}
+        nodeId={node.id}
+        fieldName="value"
+      >
+        <Textarea 
+          placeholder={node.props?.placeholder ?? "请输入..."} 
+          className={node.props?.className}
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value);
+            if (node.props?.events) {
+              (node.props.events as any[]).forEach((event) => {
+                if (event.type === "onChange") {
+                  execHandler(event.handler, { value: e.target.value, ...event.params });
+                }
+              });
+            }
+          }}
+          onBlur={() => {
+            if (node.props?.required) {
+              formValidationManager.markFieldBlurred(node.id, 'value');
+            }
+          }}
+        />
+      </FormLabel>
+    );
+  },
+  Switch: (node) => {
+    const [checked, setChecked] = useState(!!node.props?.checked);
+    
+    useEffect(() => {
+      if (node.props?.required) {
+        formValidationManager.registerField(node.id, 'checked', true);
+        formValidationManager.updateFieldValue(node.id, 'checked', checked);
+      }
+    }, [checked, node.id, node.props?.required]);
+    
+    return (
+      <FormLabel 
+        label={node.props?.title} 
+        required={node.props?.required}
+        className={node.props?.labelClassName}
+        nodeId={node.id}
+        fieldName="checked"
+      >
+        <div className="flex items-center space-x-2">
+          <Switch 
+            checked={checked}
+            disabled={!!node.props?.disabled}
+            onCheckedChange={(newChecked) => {
+              setChecked(newChecked);
+              // 标记为已交互（相当于失去焦点）
+              if (node.props?.required) {
+                formValidationManager.markFieldBlurred(node.id, 'checked');
               }
-            });
-          }
-        }}
-        className={node.props?.className}
-      />
-      {node.props?.label && (
-        <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-          {node.props.label}
-        </label>
-      )}
-    </div>
-  ),
-  Slider: (node) => <Slider defaultValue={[node.props?.value ?? 50]} />,
+              // 触发事件处理
+              if (node.props?.events) {
+                (node.props.events as any[]).forEach((event) => {
+                  if (event.type === "onChange") {
+                    execHandler(event.handler, { checked: newChecked, ...event.params });
+                  }
+                });
+              }
+            }}
+            className={node.props?.className}
+          />
+          {node.props?.label && (
+            <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+              {node.props.label}
+            </label>
+          )}
+        </div>
+      </FormLabel>
+    );
+  },
+  Slider: (node) => {
+    const [value, setValue] = useState([node.props?.value ?? 50]);
+    
+    useEffect(() => {
+      if (node.props?.required) {
+        const { formValidationManager } = require('./utils/form-validation');
+        formValidationManager.updateFieldValue(node.id, 'value', value[0]);
+      }
+    }, [value, node.id, node.props?.required]);
+    
+    return (
+      <FormLabel 
+        label={node.props?.label} 
+        required={node.props?.required}
+        className={node.props?.labelClassName}
+        nodeId={node.id}
+        fieldName="value"
+      >
+        <Slider 
+          value={value}
+          onValueChange={(newValue) => {
+            setValue(newValue);
+            if (node.props?.events) {
+              (node.props.events as any[]).forEach((event) => {
+                if (event.type === "onValueChange") {
+                  execHandler(event.handler, { value: newValue[0], ...event.params });
+                }
+              });
+            }
+          }}
+          className={node.props?.className} 
+        />
+      </FormLabel>
+    );
+  },
   Separator: () => <Separator />,
   Avatar: (node) => (
     <Avatar>
@@ -487,19 +629,48 @@ export const registry: Record<string, Renderer> = {
          { value: "option1", label: "选项1" },
          { value: "option2", label: "选项2" },
        ];
+       const [value, setValue] = useState(node.props?.defaultValue || '');
+       
+       useEffect(() => {
+         if (node.props?.required) {
+           const { formValidationManager } = require('./utils/form-validation');
+           formValidationManager.updateFieldValue(node.id, 'value', value);
+         }
+       }, [value, node.id, node.props?.required]);
+       
        return (
-         <Select defaultValue={node.props?.defaultValue}>
-           <SelectTrigger className={node.props?.className}>
-             <SelectValue placeholder={node.props?.placeholder ?? "请选择..."} />
-           </SelectTrigger>
-           <SelectContent>
-             {options.map((option: any) => (
-               <SelectItem key={option.value} value={option.value}>
-                 {option.label}
-               </SelectItem>
-             ))}
-           </SelectContent>
-         </Select>
+         <FormLabel 
+           label={node.props?.label} 
+           required={node.props?.required}
+           className={node.props?.labelClassName}
+           nodeId={node.id}
+           fieldName="value"
+         >
+           <Select 
+             value={value}
+             onValueChange={(newValue) => {
+               setValue(newValue);
+               if (node.props?.events) {
+                 (node.props.events as any[]).forEach((event) => {
+                   if (event.type === "onValueChange") {
+                     execHandler(event.handler, { value: newValue, ...event.params });
+                   }
+                 });
+               }
+             }}
+           >
+             <SelectTrigger className={node.props?.className}>
+               <SelectValue placeholder={node.props?.placeholder ?? "请选择..."} />
+             </SelectTrigger>
+             <SelectContent>
+               {options.map((option: any) => (
+                 <SelectItem key={option.value} value={option.value}>
+                   {option.label}
+                 </SelectItem>
+               ))}
+             </SelectContent>
+           </Select>
+         </FormLabel>
        );
      },
      HoverCard: (node) => (
@@ -1062,6 +1233,13 @@ export const registry: Record<string, Renderer> = {
     
     const [targetKeys, setTargetKeys] = useState<string[]>(node.props?.targetKeys || []);
     
+    useEffect(() => {
+      if (node.props?.required) {
+        const { formValidationManager } = require('./utils/form-validation');
+        formValidationManager.updateFieldValue(node.id, 'targetKeys', targetKeys);
+      }
+    }, [targetKeys, node.id, node.props?.required]);
+    
     const handleChange = (newTargetKeys: string[], direction: 'left' | 'right', moveKeys: string[]) => {
       setTargetKeys(newTargetKeys);
       if (node.props?.events) {
@@ -1073,19 +1251,33 @@ export const registry: Record<string, Renderer> = {
     };
     
     return (
-      <Transfer
-        dataSource={dataSource}
-        targetKeys={targetKeys}
-        onChange={handleChange}
-        titles={node.props?.titles || ['可选项', '已选项']}
-        showSearch={node.props?.showSearch ?? true}
-        searchPlaceholder={node.props?.searchPlaceholder || '搜索选项'}
-        className={node.props?.className}
-      />
+      <FormLabel 
+        label={node.props?.label} 
+        required={node.props?.required}
+        className={node.props?.labelClassName}
+        nodeId={node.id}
+        fieldName="targetKeys"
+      >
+        <Transfer
+          dataSource={dataSource}
+          targetKeys={targetKeys}
+          onChange={handleChange}
+          titles={node.props?.titles || ['可选项', '已选项']}
+          showSearch={node.props?.showSearch ?? true}
+          searchPlaceholder={node.props?.searchPlaceholder || '搜索选项'}
+          className={node.props?.className}
+        />
+      </FormLabel>
     );
    },
    Upload: (node) => {
      const [fileList, setFileList] = useState<any[]>(node.props?.fileList || []);
+     
+     useEffect(() => {
+       if (node.props?.fieldName) {
+         formValidationManager.updateFieldValue(node.id, node.props.fieldName, fileList);
+       }
+     }, [fileList, node.id, node.props?.fieldName]);
      
      const handleChange = (newFileList: any[]) => {
        setFileList(newFileList);
@@ -1098,35 +1290,133 @@ export const registry: Record<string, Renderer> = {
      };
      
      return (
-       <Upload
-         accept={node.props?.accept}
-         multiple={node.props?.multiple ?? false}
-         maxCount={node.props?.maxCount ?? 1}
-         maxSize={node.props?.maxSize}
-         fileList={fileList}
-         onChange={handleChange}
-         disabled={node.props?.disabled ?? false}
-         listType={node.props?.listType ?? 'text'}
-         showUploadList={node.props?.showUploadList ?? true}
-         className={node.props?.className}
-       />
+       <FormLabel 
+         label={node.props?.label} 
+         required={node.props?.required}
+         className={node.props?.labelClassName}
+         nodeId={node.id}
+         fieldName={node.props?.fieldName}
+       >
+         <Upload
+           accept={node.props?.accept}
+           multiple={node.props?.multiple ?? false}
+           maxCount={node.props?.maxCount ?? 1}
+           maxSize={node.props?.maxSize}
+           fileList={fileList}
+           onChange={handleChange}
+           disabled={node.props?.disabled ?? false}
+           listType={node.props?.listType ?? 'text'}
+           showUploadList={node.props?.showUploadList ?? true}
+           className={node.props?.className}
+         />
+       </FormLabel>
      );
    },
    Iframe: (node) => (
-     <Iframe
-       src={node.props?.src || 'https://example.com'}
-       title={node.props?.title || 'Iframe'}
-       width={node.props?.width || '100%'}
-       height={node.props?.height || '400px'}
-       loading={node.props?.loading || 'lazy'}
-       sandbox={node.props?.sandbox}
-       allowFullScreen={node.props?.allowFullScreen ?? false}
-       showHeader={node.props?.showHeader ?? true}
-       showRefresh={node.props?.showRefresh ?? true}
-       showExternalLink={node.props?.showExternalLink ?? true}
-       className={node.props?.className}
-     />
-   ),
+      <Iframe
+        src={node.props?.src || 'https://example.com'}
+        title={node.props?.title || 'Iframe'}
+        width={node.props?.width || '100%'}
+        height={node.props?.height || '400px'}
+        loading={node.props?.loading || 'lazy'}
+        sandbox={node.props?.sandbox}
+        allowFullScreen={node.props?.allowFullScreen ?? false}
+        showHeader={node.props?.showHeader ?? true}
+        showRefresh={node.props?.showRefresh ?? true}
+        showExternalLink={node.props?.showExternalLink ?? true}
+        className={node.props?.className}
+      />
+    ),
+    Tree: (node) => {
+      const defaultTreeData = [
+        {
+          key: '1',
+          title: '根节点 1',
+          children: [
+            {
+              key: '1-1',
+              title: '子节点 1-1',
+              children: [
+                { key: '1-1-1', title: '叶子节点 1-1-1', isLeaf: true },
+                { key: '1-1-2', title: '叶子节点 1-1-2', isLeaf: true }
+              ]
+            },
+            { key: '1-2', title: '子节点 1-2', isLeaf: true }
+          ]
+        },
+        {
+          key: '2',
+          title: '根节点 2',
+          children: [
+            { key: '2-1', title: '子节点 2-1', isLeaf: true },
+            { key: '2-2', title: '子节点 2-2', isLeaf: true }
+          ]
+        }
+      ];
+
+      return (
+        <Tree
+          treeData={node.props?.treeData || defaultTreeData}
+          defaultExpandedKeys={node.props?.defaultExpandedKeys || ['1']}
+          defaultSelectedKeys={node.props?.defaultSelectedKeys || []}
+          showIcon={node.props?.showIcon ?? true}
+          showLine={node.props?.showLine ?? false}
+          checkable={node.props?.checkable ?? false}
+          height={node.props?.height}
+          className={node.props?.className}
+          onSelect={(selectedKeys, info) => {
+            if (node.props?.onSelect) {
+              execHandler(node.props.onSelect, { selectedKeys, info });
+            }
+          }}
+          onExpand={(expandedKeys, info) => {
+            if (node.props?.onExpand) {
+              execHandler(node.props.onExpand, { expandedKeys, info });
+            }
+          }}
+          onCheck={(checkedKeys, info) => {
+            if (node.props?.onCheck) {
+              execHandler(node.props.onCheck, { checkedKeys, info });
+            }
+          }}
+        />
+      );
+    },
+    SubmitButton: (node, ctx) => {
+      const handleSubmit = (isValid: boolean) => {
+        if (node.props?.events) {
+          (node.props.events as any[]).forEach((ev) => {
+            if (ev?.type === 'submit' && ev?.handler) {
+              execHandler(ev.handler, { isValid });
+            }
+          });
+        }
+      };
+      
+      const handleClick = () => {
+        if (node.props?.events) {
+          (node.props.events as any[]).forEach((ev) => {
+            if (ev?.type === 'click' && ev?.handler) {
+              execHandler(ev.handler, {});
+            }
+          });
+        }
+      };
+      
+      return (
+        <SubmitButton
+          variant={node.props?.variant || 'default'}
+          size={node.props?.size || 'default'}
+          className={node.props?.className}
+          disabled={node.props?.disabled ?? false}
+          rootNode={ctx.rootNode}
+          onSubmit={handleSubmit}
+          onClick={handleClick}
+        >
+          {node.props?.text || '提交'}
+        </SubmitButton>
+      );
+    },
 };
 
 export function NodeRenderer({ node, ctx }: { node: NodeMeta; ctx: any }) {

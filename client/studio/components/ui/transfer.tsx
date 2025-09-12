@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import * as CheckboxPrimitive from "@radix-ui/react-checkbox";
 import { cn } from "@/lib/utils";
 import { ChevronRight, ChevronLeft, Search } from "lucide-react";
 
@@ -77,7 +78,7 @@ export function Transfer({
   };
 
   const renderPanel = (data: TransferItem[], selectedKeys: string[], side: 'left' | 'right') => {
-    const checkboxRef = useRef<HTMLButtonElement>(null);
+    const checkboxRef = useRef<React.ElementRef<typeof CheckboxPrimitive.Root>>(null);
     
     const handleSelectAll = (checked: boolean) => {
       const allKeys = data.filter(item => !item.disabled).map(item => item.key);
@@ -96,11 +97,8 @@ export function Transfer({
     const checkAllChecked = checkableCount > 0 && checkedCount === checkableCount;
     const checkAllIndeterminate = checkedCount > 0 && checkedCount < checkableCount;
     
-    useEffect(() => {
-      if (checkboxRef.current) {
-        checkboxRef.current.indeterminate = checkAllIndeterminate;
-      }
-    }, [checkAllIndeterminate]);
+    // Note: Radix UI Checkbox doesn't support indeterminate state directly
+    // The visual state is handled by the checked prop and styling
 
     return (
       <div className="flex flex-col border rounded-md h-64 w-48">

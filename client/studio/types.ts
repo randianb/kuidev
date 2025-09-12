@@ -33,7 +33,8 @@ export type ComponentType =
   | "Sheet"
   | "Transfer"
   | "Upload"
-  | "Iframe";
+  | "Iframe"
+  | "Tree";
 
 export interface NodeMeta {
   id: NodeId;
