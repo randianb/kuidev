@@ -31,7 +31,12 @@ import { Tree } from "./components/ui/tree";
 import { FormLabel } from "./components/ui/form-label";
 import { SubmitButton } from "./components/ui/submit-button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
-import { ArrowUpDown } from "lucide-react";
+import { 
+  ArrowUpDown, Plus, Minus, Edit, Trash2, Save, Search, Settings, 
+  User, Home, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Check, 
+  X, Heart, Star, Download, Upload as UploadIcon, RefreshCw, Copy, Share, 
+  Info, AlertTriangle, XCircle, CheckCircle, Loader2
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { bus } from "@/lib/eventBus";
 import { execHandler } from "@/lib/handlers";
@@ -80,10 +85,234 @@ export type Renderer = (
     onPaste?: (parentId: string) => void; // 粘贴组件
     onDelete?: (nodeId: string) => void; // 删除组件
     onDuplicate?: (nodeId: string) => void; // 复制组件
+    gridData?: any; // 栅格数据绑定
   },
 ) => JSX.Element;
 
 export const registry: Record<string, Renderer> = {
+  Grid: (node, ctx) => {
+    const cols = node.props?.cols || 12;
+    const gap = node.props?.gap || 4;
+    const responsive = node.props?.responsive !== false;
+    const dataSource = node.props?.dataSource || "static";
+    const data = node.props?.data || [];
+    const fieldMapping = node.props?.fieldMapping || {};
+    
+    // 如果有数据源且不是设计模式，渲染数据驱动的栅格
+    const shouldRenderData = !ctx.design && dataSource !== "static" && Array.isArray(data) && data.length > 0;
+    
+    return (
+      <div
+        className={cn(
+          "relative rounded-md border border-dashed p-3",
+          ctx.design ? "hover:border-ring" : "border-transparent p-0",
+          "grid",
+          `grid-cols-${cols}`,
+          `gap-${gap}`,
+          responsive && "sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4",
+          node.props?.className,
+        )}
+        data-node-id={node.id}
+        style={{
+          gridTemplateColumns: responsive ? undefined : `repeat(${cols}, minmax(0, 1fr))`,
+          ...node.style,
+        }}
+      >
+        {ctx.design && ctx.selectedId === node.id && !node.locked && !(ctx.rootNode && isNodeInLockedContainer(node.id, ctx.rootNode)) && (
+          <div className="pointer-events-auto">
+            <div className="absolute inset-0 rounded-md ring-2 ring-blue-500/60 pointer-events-none" />
+            {/* 添加栅格项按钮 */}
+            <div className="absolute -top-3 left-1/2 z-10 -translate-x-1/2">
+              <button
+                className="rounded bg-background px-2 py-0.5 text-xs shadow-sm border"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  ctx.createChild?.(node.id, "GridItem");
+                }}
+              >
+                +项
+              </button>
+            </div>
+            {/* 左右插入兄弟元素 */}
+            <div className="absolute top-1/2 -left-3 z-10 -translate-y-1/2">
+              <button
+                className="rounded bg-background px-1 py-0.5 text-xs shadow-sm border"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  ctx.insertSibling?.(node.id, "left");
+                }}
+              >
+                ←
+              </button>
+            </div>
+            <div className="absolute top-1/2 -right-3 z-10 -translate-y-1/2">
+              <button
+                className="rounded bg-background px-1 py-0.5 text-xs shadow-sm border"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  ctx.insertSibling?.(node.id, "right");
+                }}
+              >
+                →
+              </button>
+            </div>
+          </div>
+        )}
+        
+        {shouldRenderData ? (
+          // 数据驱动渲染
+          data.map((item, index) => (
+            <div key={index} className="col-span-1">
+              {(node.children ?? []).map((child) => {
+                // 为每个子组件创建数据绑定的副本
+                const boundChild = {
+                  ...child,
+                  props: {
+                    ...child.props,
+                    // 根据字段映射绑定数据
+                    ...(fieldMapping[child.id] ? {
+                      [fieldMapping[child.id].prop]: item[fieldMapping[child.id].field]
+                    } : {})
+                  }
+                };
+                return <NodeRenderer key={`${child.id}-${index}`} node={boundChild} ctx={ctx} />;
+              })}
+            </div>
+          ))
+        ) : (
+          // 设计模式或静态渲染
+          (node.children ?? []).map((child) => (
+            <NodeRenderer key={child.id} node={child} ctx={ctx} />
+          ))
+        )}
+        
+        {!shouldRenderData && !node.children?.length && (
+          <div className="col-span-full flex items-center justify-center min-h-[120px]">
+            <div className="pointer-events-none select-none text-center text-xs text-muted-foreground py-10">
+              空栅格，点击"+项"添加栅格项
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  },
+  
+  GridItem: (node, ctx) => {
+    const span = node.props?.span || 1;
+    const offset = node.props?.offset || 0;
+    const smSpan = node.props?.smSpan;
+    const mdSpan = node.props?.mdSpan;
+    const lgSpan = node.props?.lgSpan;
+    const xlSpan = node.props?.xlSpan;
+    
+    return (
+      <div
+        className={cn(
+          "relative rounded-md border border-dashed p-3",
+          ctx.design ? "hover:border-ring" : "border-transparent p-0",
+          `col-span-${span}`,
+          offset > 0 && `col-start-${offset + 1}`,
+          smSpan && `sm:col-span-${smSpan}`,
+          mdSpan && `md:col-span-${mdSpan}`,
+          lgSpan && `lg:col-span-${lgSpan}`,
+          xlSpan && `xl:col-span-${xlSpan}`,
+          node.props?.className,
+        )}
+        data-node-id={node.id}
+        style={node.style}
+      >
+        {ctx.design && ctx.selectedId === node.id && !node.locked && !(ctx.rootNode && isNodeInLockedContainer(node.id, ctx.rootNode)) && (
+          <div className="pointer-events-auto">
+            <div className="absolute inset-0 rounded-md ring-2 ring-blue-500/60 pointer-events-none" />
+            {/* 添加子组件按钮 */}
+            <div className="absolute -top-3 left-1/2 z-10 -translate-x-1/2">
+              <button
+                className="rounded bg-background px-2 py-0.5 text-xs shadow-sm border"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  ctx.createChild?.(node.id, "Container");
+                }}
+              >
+                +
+              </button>
+            </div>
+            {/* 左右插入兄弟元素 */}
+            <div className="absolute top-1/2 -left-3 z-10 -translate-y-1/2">
+              <button
+                className="rounded bg-background px-1 py-0.5 text-xs shadow-sm border"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  ctx.insertSibling?.(node.id, "left");
+                }}
+              >
+                ←
+              </button>
+            </div>
+            <div className="absolute top-1/2 -right-3 z-10 -translate-y-1/2">
+              <button
+                className="rounded bg-background px-1 py-0.5 text-xs shadow-sm border"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  ctx.insertSibling?.(node.id, "right");
+                }}
+              >
+                →
+              </button>
+            </div>
+          </div>
+        )}
+        
+        {(node.children ?? []).map((child) => (
+          <NodeRenderer key={child.id} node={child} ctx={ctx} />
+        ))}
+        
+        {!node.children?.length && (
+          <div className="flex items-center justify-center min-h-[80px]">
+            <div className="pointer-events-none select-none text-center text-xs text-muted-foreground py-6">
+              栅格项 (span: {span})
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  },
+  
+  Label: (node, ctx) => {
+    const text = node.props?.text || "标签文本";
+    const htmlFor = node.props?.htmlFor;
+    const required = node.props?.required;
+    const size = node.props?.size || "default";
+    
+    return (
+      <label
+        htmlFor={htmlFor}
+        onClick={(e) => {
+          if (ctx.design) {
+            e.stopPropagation();
+            ctx.onSelect?.(node.id);
+          }
+        }}
+        className={cn(
+          "relative rounded-md border border-dashed p-2",
+          ctx.design ? "hover:border-ring cursor-pointer" : "border-transparent p-0",
+          size === "sm" && "text-sm",
+          size === "lg" && "text-lg",
+          "font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70",
+          node.props?.className,
+        )}
+        data-node-id={node.id}
+        style={node.style}
+      >
+        {ctx.design && ctx.selectedId === node.id && !node.locked && !(ctx.rootNode && isNodeInLockedContainer(node.id, ctx.rootNode)) && (
+          <div className="absolute inset-0 rounded-md ring-2 ring-blue-500/60 pointer-events-none" />
+        )}
+        
+        {text}
+        {required && <span className="text-red-500 ml-1">*</span>}
+      </label>
+    );
+  },
+  
   Container: (node, ctx) => {
     // 添加调试日志
     console.log('Container Debug:', {
@@ -116,51 +345,51 @@ export const registry: Record<string, Renderer> = {
           <div className="absolute inset-0 rounded-md ring-2 ring-blue-500/60 pointer-events-none" />
           {/* 根据布局方向显示不同的添加按钮 */}
           {node.layout === "col" ? (
-            // 列布局(垂直)：上下按钮控制前后位置，左右按钮控制子元素添加
+            // 列布局(垂直)：上下按钮控制子元素添加，左右按钮控制兄弟元素插入
             <>
-              {/* top - 在当前容器前插入 */}
+              {/* top - 在容器内部顶部添加子元素 */}
               <div className="absolute -top-3 left-1/2 z-10 -translate-x-1/2">
                 <button
                   className="rounded bg-background px-2 py-0.5 text-xs shadow-sm border"
                   onClick={(e) => {
                     e.stopPropagation();
-                    ctx.insertSibling?.(node.id, "top");
+                    ctx.createChild?.(node.id, "Container");
                   }}
                 >
                   ↑
                 </button>
               </div>
-              {/* bottom - 在当前容器后插入 */}
+              {/* bottom - 在容器内部底部添加子元素 */}
               <div className="absolute -bottom-3 left-1/2 z-10 -translate-x-1/2">
                 <button
                   className="rounded bg-background px-2 py-0.5 text-xs shadow-sm border"
                   onClick={(e) => {
                     e.stopPropagation();
-                    ctx.insertSibling?.(node.id, "bottom");
+                    ctx.createChild?.(node.id, "Container");
                   }}
                 >
                   ↓
                 </button>
               </div>
-              {/* left - 在容器内部顶部添加子元素 */}
+              {/* left - 在当前容器前插入兄弟元素 */}
               <div className="absolute top-1/2 -left-3 z-10 -translate-y-1/2">
                 <button
                   className="rounded bg-background px-1 py-0.5 text-xs shadow-sm border"
                   onClick={(e) => {
                     e.stopPropagation();
-                    ctx.createChild?.(node.id, "Container");
+                    ctx.insertSibling?.(node.id, "left");
                   }}
                 >
                   ←
                 </button>
               </div>
-              {/* right - 在容器内部底部添加子元素 */}
+              {/* right - 在当前容器后插入兄弟元素 */}
               <div className="absolute top-1/2 -right-3 z-10 -translate-y-1/2">
                 <button
                   className="rounded bg-background px-1 py-0.5 text-xs shadow-sm border"
                   onClick={(e) => {
                     e.stopPropagation();
-                    ctx.createChild?.(node.id, "Container");
+                    ctx.insertSibling?.(node.id, "right");
                   }}
                 >
                   →
@@ -272,8 +501,18 @@ export const registry: Record<string, Renderer> = {
           </div>
         )
       ) : (
-        <div className="min-h-[240px] flex flex-col gap-3">
-          {(node.children ?? []).map((child) => <NodeRenderer key={child.id} node={child} ctx={ctx} />)}
+        <div className={cn(
+          "min-h-[240px] flex gap-3",
+          node.layout === "col" ? "flex-col h-full" : "flex-row"
+        )}>
+          {(node.children ?? []).map((child) => (
+            <div key={child.id} className={cn(
+              node.layout === "row" ? "flex-1" : "",
+              node.layout === "col" ? "flex-1 min-h-0" : ""
+            )}>
+              <NodeRenderer node={child} ctx={ctx} />
+            </div>
+          ))}
           {!node.children?.length && (
             <div className="pointer-events-none select-none text-center text-xs text-muted-foreground w-full py-10">
               空容器，拖拽组件到此
@@ -285,33 +524,92 @@ export const registry: Record<string, Renderer> = {
     );
   },
   Button: (node) => {
-    const iconMap: Record<string, string> = {
-      plus: "➕",
-      minus: "➖",
-      edit: "✏️",
-      delete: "🗑️",
-      save: "💾",
-      search: "🔍",
-      settings: "⚙️",
-      user: "👤",
-      home: "🏠",
-      "arrow-left": "←",
-      "arrow-right": "→",
-      check: "✓",
-      close: "✕"
+    const iconMap: Record<string, React.ReactNode> = {
+      plus: <Plus className="h-4 w-4" />,
+      minus: <Minus className="h-4 w-4" />,
+      edit: <Edit className="h-4 w-4" />,
+      delete: <Trash2 className="h-4 w-4" />,
+      trash: <Trash2 className="h-4 w-4" />,
+      save: <Save className="h-4 w-4" />,
+      search: <Search className="h-4 w-4" />,
+      settings: <Settings className="h-4 w-4" />,
+      user: <User className="h-4 w-4" />,
+      home: <Home className="h-4 w-4" />,
+      "arrow-left": <ArrowLeft className="h-4 w-4" />,
+      "arrow-right": <ArrowRight className="h-4 w-4" />,
+      "arrow-up": <ArrowUp className="h-4 w-4" />,
+      "arrow-down": <ArrowDown className="h-4 w-4" />,
+      check: <Check className="h-4 w-4" />,
+      close: <X className="h-4 w-4" />,
+      heart: <Heart className="h-4 w-4" />,
+      star: <Star className="h-4 w-4" />,
+      download: <Download className="h-4 w-4" />,
+      upload: <UploadIcon className="h-4 w-4" />,
+      refresh: <RefreshCw className="h-4 w-4" />,
+      copy: <Copy className="h-4 w-4" />,
+      share: <Share className="h-4 w-4" />,
+      info: <Info className="h-4 w-4" />,
+      warning: <AlertTriangle className="h-4 w-4" />,
+      error: <XCircle className="h-4 w-4" />,
+      success: <CheckCircle className="h-4 w-4" />
     };
     
-    const icon = node.props?.icon ? iconMap[node.props.icon] : null;
+    const icon = node.props?.icon ? iconMap[node.props.icon.toLowerCase()] : null;
     const iconPosition = node.props?.iconPosition ?? "left";
     const text = node.props?.text ?? "按钮";
     const isDisabled = node.props?.disabled === true;
+    const isLoading = node.props?.loading === true;
     const isVisible = node.props?.visible !== false;
     
     if (!isVisible) return null;
     
+    const renderContent = () => {
+      if (isLoading) {
+        return (
+          <>
+            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+            {text}
+          </>
+        );
+      }
+      
+      switch (iconPosition) {
+        case "top":
+          return (
+            <div className="flex flex-col items-center gap-1">
+              {icon && <div>{icon}</div>}
+              <span>{text}</span>
+            </div>
+          );
+        case "bottom":
+          return (
+            <div className="flex flex-col items-center gap-1">
+              <span>{text}</span>
+              {icon && <div>{icon}</div>}
+            </div>
+          );
+        case "right":
+          return (
+            <>
+              {text}
+              {icon && <div className="ml-2">{icon}</div>}
+            </>
+          );
+        case "left":
+        default:
+          return (
+            <>
+              {icon && <div className="mr-2">{icon}</div>}
+              {text}
+            </>
+          );
+      }
+    };
+    
     return (
       <Button
         onClick={() => {
+          if (isLoading || isDisabled) return;
           if (node.props?.events)
             (node.props.events as any[]).forEach((ev) => ev?.type === "click" && ev?.handler && execHandler(ev.handler, ev.params));
           if (node.props?.publish) bus.publish(node.props.publish, node.props?.payload);
@@ -326,18 +624,30 @@ export const registry: Record<string, Renderer> = {
         }}
         variant={node.props?.variant ?? "default"}
         size={node.props?.size ?? "default"}
-        disabled={isDisabled}
+        disabled={isDisabled || isLoading}
         className={node.props?.className}
       >
-        {icon && iconPosition === "left" && <span className="mr-2">{icon}</span>}
-        {text}
-        {icon && iconPosition === "right" && <span className="ml-2">{icon}</span>}
+        {renderContent()}
       </Button>
     );
   },
   Badge: (node) => <Badge>{node.props?.text ?? "Badge"}</Badge>,
-  Input: (node) => {
-    const [value, setValue] = useState(node.props?.defaultValue || '');
+  Input: (node, ctx) => {
+    // 获取数据绑定值
+    const getBoundValue = () => {
+      if (node.props?.fieldMapping && ctx?.gridData) {
+        return ctx.gridData[node.props.fieldMapping] || '';
+      }
+      return node.props?.defaultValue || '';
+    };
+    
+    const [value, setValue] = useState(getBoundValue());
+    
+    // 当数据绑定变化时更新值
+    useEffect(() => {
+      const boundValue = getBoundValue();
+      setValue(boundValue);
+    }, [ctx?.gridData, node.props?.fieldMapping]);
     
     useEffect(() => {
       if (node.props?.required) {
@@ -377,8 +687,22 @@ export const registry: Record<string, Renderer> = {
       </FormLabel>
     );
   },
-  Textarea: (node) => {
-    const [value, setValue] = useState(node.props?.defaultValue || '');
+  Textarea: (node, ctx) => {
+    // 获取数据绑定值
+    const getBoundValue = () => {
+      if (node.props?.fieldMapping && ctx?.gridData) {
+        return ctx.gridData[node.props.fieldMapping] || '';
+      }
+      return node.props?.defaultValue || '';
+    };
+    
+    const [value, setValue] = useState(getBoundValue());
+    
+    // 当数据绑定变化时更新值
+    useEffect(() => {
+      const boundValue = getBoundValue();
+      setValue(boundValue);
+    }, [ctx?.gridData, node.props?.fieldMapping]);
     
     useEffect(() => {
       if (node.props?.required) {
@@ -418,8 +742,22 @@ export const registry: Record<string, Renderer> = {
       </FormLabel>
     );
   },
-  Switch: (node) => {
-    const [checked, setChecked] = useState(!!node.props?.checked);
+  Switch: (node, ctx) => {
+    // 获取数据绑定值
+    const getBoundValue = () => {
+      if (node.props?.fieldMapping && ctx?.gridData) {
+        return !!ctx.gridData[node.props.fieldMapping];
+      }
+      return !!node.props?.checked;
+    };
+    
+    const [checked, setChecked] = useState(getBoundValue());
+    
+    // 当数据绑定变化时更新值
+    useEffect(() => {
+      const boundValue = getBoundValue();
+      setChecked(boundValue);
+    }, [ctx?.gridData, node.props?.fieldMapping]);
     
     useEffect(() => {
       if (node.props?.required) {

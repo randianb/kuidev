@@ -2,6 +2,9 @@ export type NodeId = string;
 
 export type ComponentType =
   | "Container"
+  | "Grid"
+  | "GridItem"
+  | "Label"
   | "Button"
   | "Card"
   | "CollapsibleCard"
@@ -50,7 +53,7 @@ export interface NodeMeta {
   style?: Record<string, any>; // 内联样式
 }
 
-export type TemplateKind = "blank" | "cms" | "landing" | "email" | "home" | "admin";
+export type TemplateKind = "blank" | "content" | "vscode" | "landing" | "email" | "home" | "admin" | "grid" | "dashboard";
 
 export interface PageMeta {
   id: string;
@@ -90,11 +93,67 @@ export function createNode(type: ComponentType, partial?: Partial<NodeMeta>): No
 export function createPage(name: string, template: TemplateKind): PageMeta {
   const root = createNode("Container", { layout: "col" });
   // Pre-seed containers based on template
-  if (template === "cms") {
-    root.layout = "row";
+  if (template === "content") {
+    root.layout = "col";
     root.children = [
-      createNode("Container", { props: { title: "侧边栏" }, layout: "col" }),
-      createNode("Container", { props: { title: "内容区" }, layout: "col" }),
+      createNode("Container", { props: { title: "内容头部", className: "h-[60px] min-h-[60px]" }, layout: "row" }),
+      createNode("Container", { props: { title: "内容主体" }, layout: "col" }),
+    ];
+  } else if (template === "vscode") {
+    root.layout = "col";
+    root.children = [
+      // 顶部标题栏
+      createNode("Container", { 
+        props: { title: "标题栏", className: "h-[40px] min-h-[40px] bg-slate-800 text-white border-b border-slate-600" }, 
+        layout: "row" 
+      }),
+      // 主体区域 - 可调整分栏
+      createNode("Container", {
+        layout: "row",
+        resizable: true,
+        resizableEnabled: true,
+        panelSizes: [15, 85], // 侧边栏15%，主区域85%
+        children: [
+          // 左侧面板区域
+          createNode("Container", {
+            layout: "row",
+            resizable: true,
+            resizableEnabled: true,
+            panelSizes: [20, 80], // 活动栏20%，文件浏览器80%
+            children: [
+              // 活动栏
+              createNode("Container", { 
+                props: { title: "活动栏", className: "min-w-[48px] bg-slate-900 border-r border-slate-600" }, 
+                layout: "col" 
+              }),
+              // 文件浏览器
+              createNode("Container", { 
+                props: { title: "资源管理器", className: "min-w-[200px] bg-slate-800 border-r border-slate-600" }, 
+                layout: "col" 
+              }),
+            ],
+          }),
+          // 编辑器区域 - 可调整分栏
+          createNode("Container", {
+            layout: "col",
+            resizable: true,
+            resizableEnabled: true,
+            panelSizes: [75, 25], // 编辑器75%，底部面板25%
+            children: [
+              // 编辑器主体
+              createNode("Container", { 
+                props: { title: "编辑器", className: "min-h-[300px] bg-slate-700" }, 
+                layout: "col" 
+              }),
+              // 底部面板
+              createNode("Container", { 
+                props: { title: "终端", className: "min-h-[120px] bg-slate-800 border-t border-slate-600" }, 
+                layout: "col" 
+              }),
+            ],
+          }),
+        ],
+      }),
     ];
   } else if (template === "landing") {
     root.layout = "col";
@@ -123,6 +182,45 @@ export function createPage(name: string, template: TemplateKind): PageMeta {
         children: [
           createNode("Container", { props: { title: "侧边栏" }, layout: "col" }),
           createNode("Container", { props: { title: "工作区" }, layout: "col" }),
+        ],
+      }),
+    ];
+  } else if (template === "grid") {
+    root.layout = "col";
+    root.children = [
+      createNode("Grid", {
+        props: { 
+          title: "栅格布局", 
+          cols: 12, 
+          gap: 4, 
+          responsive: true 
+        },
+        children: [
+          createNode("GridItem", { props: { title: "栅格项 1", span: 6 } }),
+          createNode("GridItem", { props: { title: "栅格项 2", span: 6 } }),
+          createNode("GridItem", { props: { title: "栅格项 3", span: 4 } }),
+          createNode("GridItem", { props: { title: "栅格项 4", span: 8 } }),
+        ],
+      }),
+    ];
+  } else if (template === "dashboard") {
+    root.layout = "col";
+    root.children = [
+      createNode("Container", { props: { title: "顶部导航", className: "h-[60px] min-h-[60px]" } }),
+      createNode("Grid", {
+        props: { 
+          title: "仪表板内容", 
+          cols: 12, 
+          gap: 6, 
+          responsive: true 
+        },
+        children: [
+          createNode("GridItem", { props: { title: "统计卡片 1", span: 3, smSpan: 6, mdSpan: 4 } }),
+          createNode("GridItem", { props: { title: "统计卡片 2", span: 3, smSpan: 6, mdSpan: 4 } }),
+          createNode("GridItem", { props: { title: "统计卡片 3", span: 3, smSpan: 6, mdSpan: 4 } }),
+          createNode("GridItem", { props: { title: "统计卡片 4", span: 3, smSpan: 6, mdSpan: 4 } }),
+          createNode("GridItem", { props: { title: "图表区域", span: 8, smSpan: 12, mdSpan: 8 } }),
+          createNode("GridItem", { props: { title: "侧边信息", span: 4, smSpan: 12, mdSpan: 4 } }),
         ],
       }),
     ];

@@ -1501,6 +1501,211 @@ function Inspector({
           </AccordionContent>
         </AccordionItem>
 
+        {local.type === "Grid" && (
+          <AccordionItem value="grid-config">
+            <AccordionTrigger className="text-sm font-medium">
+              栅格配置
+            </AccordionTrigger>
+            <AccordionContent className="space-y-3">
+              <div className="grid gap-2">
+                <label className="text-xs">列数</label>
+                <Input type="number" value={local.props?.cols ?? 12} onChange={(e) => set("cols", Number(e.target.value))} />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-xs">间距</label>
+                <Input type="number" value={local.props?.gap ?? 4} onChange={(e) => set("gap", Number(e.target.value))} />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-xs">响应式布局</label>
+                <div className="flex items-center gap-2">
+                  <Switch 
+                    id="responsive" 
+                    checked={local.props?.responsive !== false} 
+                    onCheckedChange={(checked) => set("responsive", checked)} 
+                  />
+                  <label htmlFor="responsive" className="text-xs">启用响应式</label>
+                </div>
+              </div>
+              
+              <div className="grid gap-2">
+                <label className="text-xs">数据源</label>
+                <Select value={local.props?.dataSource ?? "static"} onValueChange={(v) => set("dataSource", v)}>
+                  <SelectTrigger className="h-8">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="static">静态</SelectItem>
+                    <SelectItem value="url">接口 URL</SelectItem>
+                    <SelectItem value="topic">事件主题</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              {local.props?.dataSource === "url" && (
+                <div className="grid gap-2">
+                  <label className="text-xs">URL</label>
+                  <Input value={local.props?.url ?? ""} onChange={(e) => set("url", e.target.value)} />
+                </div>
+              )}
+              
+              {local.props?.dataSource === "topic" && (
+                <div className="grid gap-2">
+                  <label className="text-xs">订阅主题</label>
+                  <Input value={local.props?.topic ?? ""} onChange={(e) => set("topic", e.target.value)} />
+                </div>
+              )}
+              
+              {(local.props?.dataSource ?? "static") === "static" && (
+                <div className="grid gap-2">
+                  <label className="text-xs">静态数据 JSON(Array)</label>
+                  <Textarea rows={4} value={JSON.stringify(local.props?.data ?? [], null, 2)} onChange={(e) => {
+                    try {
+                      const v = JSON.parse(e.target.value || "[]");
+                      set("data", v);
+                    } catch {}
+                  }} />
+                </div>
+              )}
+              
+              <div className="grid gap-2">
+                <label className="text-xs">字段映射配置</label>
+                <Textarea 
+                  rows={3} 
+                  value={JSON.stringify(local.props?.fieldMapping ?? {}, null, 2)} 
+                  onChange={(e) => {
+                    try {
+                      const v = JSON.parse(e.target.value || "{}");
+                      set("fieldMapping", v);
+                    } catch {}
+                  }} 
+                  placeholder='{"childId": {"prop": "text", "field": "name"}}'
+                />
+                <div className="text-[11px] text-muted-foreground">
+                   配置子组件的数据绑定，格式：{'{"子组件ID": {"prop": "属性名", "field": "数据字段"}}'}
+                 </div>
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        )}
+        
+        {local.type === "Button" && (
+          <AccordionItem value="button-config">
+            <AccordionTrigger className="text-sm font-medium">
+              按钮配置
+            </AccordionTrigger>
+            <AccordionContent className="space-y-3">
+              <div className="grid gap-2">
+                <label className="text-xs">按钮变体</label>
+                <Select value={local.props?.variant ?? "default"} onValueChange={(v) => set("variant", v)}>
+                  <SelectTrigger className="h-8">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="default">默认</SelectItem>
+                    <SelectItem value="destructive">危险</SelectItem>
+                    <SelectItem value="outline">轮廓</SelectItem>
+                    <SelectItem value="secondary">次要</SelectItem>
+                    <SelectItem value="ghost">幽灵</SelectItem>
+                    <SelectItem value="link">链接</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <label className="text-xs">按钮大小</label>
+                <Select value={local.props?.size ?? "default"} onValueChange={(v) => set("size", v)}>
+                  <SelectTrigger className="h-8">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="sm">小</SelectItem>
+                    <SelectItem value="default">默认</SelectItem>
+                    <SelectItem value="lg">大</SelectItem>
+                    <SelectItem value="icon">图标</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <label className="text-xs">图标</label>
+                <Input value={local.props?.icon ?? ""} onChange={(e) => set("icon", e.target.value)} placeholder="图标名称 (如: plus, edit, trash, save, search)" />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-xs">图标位置</label>
+                <Select value={local.props?.iconPosition ?? "left"} onValueChange={(v) => set("iconPosition", v)}>
+                  <SelectTrigger className="h-8">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="left">左侧</SelectItem>
+                    <SelectItem value="right">右侧</SelectItem>
+                    <SelectItem value="top">上方</SelectItem>
+                    <SelectItem value="bottom">下方</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <label className="text-xs">加载状态</label>
+                <div className="flex items-center gap-2">
+                  <Switch 
+                    id="loading" 
+                    checked={local.props?.loading === true} 
+                    onCheckedChange={(checked) => set("loading", checked)} 
+                  />
+                  <label htmlFor="loading" className="text-xs">显示加载动画</label>
+                </div>
+              </div>
+              <div className="grid gap-2">
+                <label className="text-xs">禁用状态</label>
+                <div className="flex items-center gap-2">
+                  <Switch 
+                    id="disabled" 
+                    checked={local.props?.disabled === true} 
+                    onCheckedChange={(checked) => set("disabled", checked)} 
+                  />
+                  <label htmlFor="disabled" className="text-xs">禁用按钮</label>
+                </div>
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        )}
+        
+        {local.type === "Label" && (
+          <AccordionItem value="label-config">
+            <AccordionTrigger className="text-sm font-medium">
+              标签配置
+            </AccordionTrigger>
+            <AccordionContent className="space-y-3">
+              <div className="grid gap-2">
+                <label className="text-xs">关联表单控件</label>
+                <Input value={local.props?.htmlFor ?? ""} onChange={(e) => set("htmlFor", e.target.value)} placeholder="输入控件的ID" />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-xs">标签大小</label>
+                <Select value={local.props?.size ?? "default"} onValueChange={(v) => set("size", v)}>
+                  <SelectTrigger className="h-8">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="sm">小</SelectItem>
+                    <SelectItem value="default">默认</SelectItem>
+                    <SelectItem value="lg">大</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <label className="text-xs">必填标记</label>
+                <div className="flex items-center gap-2">
+                  <Switch 
+                    id="required" 
+                    checked={local.props?.required === true} 
+                    onCheckedChange={(checked) => set("required", checked)} 
+                  />
+                  <label htmlFor="required" className="text-xs">显示必填标记(*)</label>
+                </div>
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        )}
+        
         {local.type === "Table" && (
           <AccordionItem value="table-config">
             <AccordionTrigger className="text-sm font-medium">
@@ -2164,8 +2369,27 @@ function Inspector({
                 </>
               )}
               
+              {/* 数据绑定配置 */}
+              <Separator />
+              <div className="space-y-3">
+                <div className="text-xs font-medium">数据绑定</div>
+                
+                <div className="grid gap-2">
+                  <label className="text-xs">字段映射</label>
+                  <Input 
+                    value={local.props?.fieldMapping ?? ""} 
+                    onChange={(e) => set("fieldMapping", e.target.value)} 
+                    placeholder="数据字段名，如：name, email, status"
+                  />
+                  <div className="text-xs text-muted-foreground">
+                    当组件位于栅格容器内时，可以绑定到栅格数据源的字段
+                  </div>
+                </div>
+              </div>
+              
               {local.type === "Select" && (
                 <>
+                  <Separator />
                   <div className="grid gap-2">
                     <label className="text-xs">占位符</label>
                     <Input 
@@ -2312,7 +2536,7 @@ export default function Studio() {
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
   const pageId = params.get("id");
-  const [page, setPage] = useState<PageMeta>(() => (pageId ? (getPage(pageId!) as PageMeta) ?? createPage("新页面", "cms") : createPage("新页面", "cms")));
+  const [page, setPage] = useState<PageMeta>(() => (pageId ? (getPage(pageId!) as PageMeta) ?? createPage("新页面", "content") : createPage("新页面", "content")));
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [clipboard, setClipboard] = useState<NodeMeta | null>(null);
   const [cmdOpen, setCmdOpen] = useState(false);
@@ -2778,15 +3002,27 @@ export default function Studio() {
   };
 
   const layoutTemplates = {
-    "CMS布局": [
-      { template: "cms", label: "CMS 左右", description: "经典CMS管理界面布局" },
-      { template: "landing", label: "首页 上下", description: "首页上下布局转为CMS布局" },
+    "内容布局": [
+      { template: "content", label: "内容布局", description: "简洁的内容展示布局" },
+      { template: "vscode", label: "VSCode布局", description: "类似VSCode的编辑器布局" },
+      { template: "landing", label: "首页布局", description: "首页上下布局" },
+    ],
+    "栅格布局": [
+      { template: "grid", label: "栅格布局", description: "灵活的12列栅格系统" },
+      { template: "dashboard", label: "仪表板布局", description: "响应式仪表板栅格布局" },
+    ],
+    "应用布局": [
+      { template: "email", label: "邮件布局", description: "左右分栏的邮件应用布局" },
+      { template: "home", label: "主页布局", description: "带顶部Banner的主页布局" },
+      { template: "admin", label: "管理后台", description: "带侧边栏的管理后台布局" },
     ],
   };
 
   const componentGroups = {
     "布局组件": [
       { key: "Container", label: "容器" },
+      { key: "Grid", label: "栅格容器" },
+      { key: "GridItem", label: "栅格项" },
       { key: "Separator", label: "分割线" },
       { key: "Card", label: "基础卡片" },
       { key: "CollapsibleCard", label: "可收缩卡片" },
@@ -2795,6 +3031,7 @@ export default function Studio() {
       { key: "StatsCard", label: "统计卡片" },
     ],
     "表单组件": [
+      { key: "Label", label: "标签" },
       { key: "Button", label: "按钮" },
       { key: "Input", label: "输入框" },
       { key: "Textarea", label: "多行输入" },
