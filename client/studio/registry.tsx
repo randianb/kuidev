@@ -314,13 +314,67 @@ export const registry: Record<string, Renderer> = {
   },
   
   Container: (node, ctx) => {
+    // 数据获取状态
+    const [formData, setFormData] = useState(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
+    
+    // 数据获取逻辑
+    useEffect(() => {
+      if (node.props?.dataId || node.props?.dataCode) {
+        setLoading(true);
+        setError(null);
+        
+        // 使用resolvefetch处理器获取数据
+        try {
+          execHandler('resolvefetch', {
+            id: node.props.dataId,
+            code: node.props.dataCode,
+            type: 'container'
+          });
+        } catch (err: any) {
+          setError(err.message || '数据获取失败');
+          setLoading(false);
+        }
+      }
+    }, [node.props?.dataId, node.props?.dataCode]);
+    
+    // 监听数据解析事件
+    useEffect(() => {
+      const handleDataResolved = (eventData) => {
+        if (eventData.id === (node.props?.dataId || node.props?.dataCode)) {
+          setFormData(eventData.data);
+          setLoading(false);
+          setError(null);
+        }
+      };
+      
+      const handleDataError = (eventData) => {
+        if (eventData.id === (node.props?.dataId || node.props?.dataCode)) {
+          setError(eventData.error);
+          setLoading(false);
+        }
+      };
+      
+      const unsubscribeResolved = bus.subscribe('form.data.resolved', handleDataResolved);
+      const unsubscribeError = bus.subscribe('form.data.error', handleDataError);
+      
+      return () => {
+        unsubscribeResolved();
+        unsubscribeError();
+      };
+    }, [node.props?.dataId, node.props?.dataCode]);
+    
     // 添加调试日志
     console.log('Container Debug:', {
       nodeId: node.id,
       resizable: node.resizable,
       resizableEnabled: node.resizableEnabled,
       layout: node.layout,
-      childrenCount: node.children?.length || 0
+      childrenCount: node.children?.length || 0,
+      hasFormData: !!formData,
+      loading,
+      error
     });
 
     return (
@@ -1058,6 +1112,56 @@ export const registry: Record<string, Renderer> = {
      ),
   // 基础卡片
   Card: (node, ctx) => {
+    const [formData, setFormData] = useState<any>(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+      // 如果有ID或编码，自动获取表单数据
+      if (node.props?.id || node.props?.code) {
+        setLoading(true);
+        setError(null);
+        
+        try {
+          execHandler('resolvefetch', {
+            id: node.props.id,
+            code: node.props.code,
+            type: 'card'
+          });
+        } catch (err: any) {
+          console.error('Card数据获取失败:', err);
+          setError(err.message || '数据获取失败');
+          setLoading(false);
+        }
+      }
+    }, [node.props?.id, node.props?.code]);
+
+    useEffect(() => {
+      // 监听数据解析事件
+      const handleDataResolved = (payload: any) => {
+        if (payload?.type === 'card' && 
+            (payload?.id === node.props?.id || payload?.code === node.props?.code)) {
+          setFormData(payload.data);
+          setError(null);
+          setLoading(false);
+        }
+      };
+
+      const unsub = bus.subscribe('dataResolved', handleDataResolved);
+      return () => unsub();
+    }, [node.props?.id, node.props?.code]);
+
+    if (ctx.design) {
+      console.log(`Card ${node.id} 调试信息:`, {
+        id: node.props?.id,
+        code: node.props?.code,
+        formData,
+        loading,
+        error,
+        props: node.props
+      });
+    }
+
     return (
       <Card className={cn(ctx.design && "cursor-default select-none")}>
         <CardHeader>
