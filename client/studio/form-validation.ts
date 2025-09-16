@@ -11,6 +11,7 @@ export interface FieldValidation {
   errorMessage?: string;
   hasBlurred?: boolean; // 是否已经失去焦点
   isValid?: boolean; // 验证状态
+  nodeCode?: string; // 节点编码，用于作为表单值的key
 }
 
 /**
@@ -24,10 +25,10 @@ export class FormValidationManager {
   /**
    * 注册或更新字段
    */
-  registerField(nodeId: string, fieldName: string, required: boolean = false): void {
+  registerField(nodeId: string, fieldName: string, required: boolean = false, nodeCode?: string): void {
     const key = `${nodeId}-${fieldName}`;
     const existingField = this.fields.get(key);
-    
+    console.log('注册',existingField)
     this.fields.set(key, {
       nodeId,
       fieldName,
@@ -35,7 +36,8 @@ export class FormValidationManager {
       value: existingField?.value,
       errorMessage: existingField?.errorMessage,
       hasBlurred: existingField?.hasBlurred || false,
-      isValid: existingField?.isValid !== undefined ? existingField.isValid : true
+      isValid: existingField?.isValid !== undefined ? existingField.isValid : true,
+      nodeCode: nodeCode || existingField?.nodeCode
     });
   }
 
@@ -209,6 +211,35 @@ export class FormValidationManager {
         this.validateField(nodeId, fieldName);
       }
     });
+  }
+
+  /**
+   * 获取指定字段的值
+   */
+  getFormValue(nodeId: string, fieldName: string = 'value'): any {
+    const key = `${nodeId}-${fieldName}`;
+    const field = this.fields.get(key);
+    console.log(`[FormValidation] getFormValue(${nodeId}, ${fieldName}):`, field?.value);
+    console.log(`[FormValidation] Available fields:`, Array.from(this.fields.keys()));
+    return field?.value;
+  }
+
+  /**
+   * 获取所有表单字段的值
+   */
+  getAllFormValues(): Record<string, any> {
+    const values: Record<string, any> = {};
+    console.log(`[FormValidation] getAllFormValues - Total fields:`, this.fields.size);
+    this.fields.forEach((field, key) => {
+      const [nodeId, fieldName] = key.split('-');
+      console.log(`[FormValidation] Processing field ${key}:`, field.value, 'nodeCode:', field.nodeCode);
+      
+      // 优先使用nodeCode作为键，如果没有则使用nodeId
+      const keyToUse = field.nodeCode || nodeId;
+      values[keyToUse] = field.value;
+    });
+    console.log(`[FormValidation] getAllFormValues result:`, values);
+    return values;
   }
 }
 

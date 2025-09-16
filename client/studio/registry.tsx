@@ -30,6 +30,8 @@ import { Iframe } from "./components/ui/iframe";
 import { Tree } from "./components/ui/tree";
 import { FormLabel } from "./components/ui/form-label";
 import { SubmitButton } from "./components/ui/submit-button";
+import { ScriptEditor } from "./components/ui/script-editor";
+import { EventListener } from "./components/ui/event-listener";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { 
   ArrowUpDown, Plus, Minus, Edit, Trash2, Save, Search, Settings, 
@@ -662,19 +664,45 @@ export const registry: Record<string, Renderer> = {
     
     return (
       <Button
-        onClick={() => {
+        onClick={async (e) => {
           if (isLoading || isDisabled) return;
-          if (node.props?.events)
-            (node.props.events as any[]).forEach((ev) => ev?.type === "click" && ev?.handler && execHandler(ev.handler, ev.params));
+          if (node.props?.events) {
+            const clickEvents = (node.props.events as any[]).filter(ev => ev?.type === "click");
+            for (const ev of clickEvents) {
+              if (ev?.script) {
+                // 执行JavaScript脚本
+                await execHandler("script", { script: ev.script, event: e });
+              } else if (ev?.handler) {
+                // 执行预定义处理器
+                await execHandler(ev.handler, ev.params);
+              }
+            }
+          }
           if (node.props?.publish) bus.publish(node.props.publish, node.props?.payload);
         }}
-        onMouseEnter={() => {
-          if (node.props?.events)
-            (node.props.events as any[]).forEach((ev) => ev?.type === "hover" && ev?.handler && execHandler(ev.handler, ev.params));
+        onMouseEnter={async (e) => {
+          if (node.props?.events) {
+            const hoverEvents = (node.props.events as any[]).filter(ev => ev?.type === "hover");
+            for (const ev of hoverEvents) {
+              if (ev?.script) {
+                await execHandler("script", { script: ev.script, event: e });
+              } else if (ev?.handler) {
+                await execHandler(ev.handler, ev.params);
+              }
+            }
+          }
         }}
-        onKeyDown={(e) => {
-          if (node.props?.events)
-            (node.props.events as any[]).forEach((ev) => ev?.type === "keydown" && ev?.handler && execHandler(ev.handler, { key: e.key, code: e.code }));
+        onKeyDown={async (e) => {
+          if (node.props?.events) {
+            const keydownEvents = (node.props.events as any[]).filter(ev => ev?.type === "keydown");
+            for (const ev of keydownEvents) {
+              if (ev?.script) {
+                await execHandler("script", { script: ev.script, event: e, key: e.key, code: e.code });
+              } else if (ev?.handler) {
+                await execHandler(ev.handler, { key: e.key, code: e.code });
+              }
+            }
+          }
         }}
         variant={node.props?.variant ?? "default"}
         size={node.props?.size ?? "default"}
@@ -704,11 +732,11 @@ export const registry: Record<string, Renderer> = {
     }, [ctx?.gridData, node.props?.fieldMapping]);
     
     useEffect(() => {
-      if (node.props?.required) {
-        formValidationManager.registerField(node.id, 'value', true);
-        formValidationManager.updateFieldValue(node.id, 'value', value);
-      }
-    }, [value, node.id, node.props?.required]);
+      // 注册所有字段，不仅仅是required字段
+      console.log(`[Registry] Input node.id: ${node.id}, node.code: ${node.code}`);
+      formValidationManager.registerField(node.id, 'value', node.props?.required || false, node.code);
+      formValidationManager.updateFieldValue(node.id, 'value', value);
+    }, [value, node.id, node.props?.required, node.code]);
     
     return (
       <FormLabel 
@@ -759,11 +787,11 @@ export const registry: Record<string, Renderer> = {
     }, [ctx?.gridData, node.props?.fieldMapping]);
     
     useEffect(() => {
-      if (node.props?.required) {
-        formValidationManager.registerField(node.id, 'value', true);
-        formValidationManager.updateFieldValue(node.id, 'value', value);
-      }
-    }, [value, node.id, node.props?.required]);
+      // 注册所有字段，不仅仅是required字段
+      console.log(`[Registry] Textarea node.id: ${node.id}, node.code: ${node.code}`);
+      formValidationManager.registerField(node.id, 'value', node.props?.required || false, node.code);
+      formValidationManager.updateFieldValue(node.id, 'value', value);
+    }, [value, node.id, node.props?.required, node.code]);
     
     return (
       <FormLabel 
@@ -814,11 +842,11 @@ export const registry: Record<string, Renderer> = {
     }, [ctx?.gridData, node.props?.fieldMapping]);
     
     useEffect(() => {
-      if (node.props?.required) {
-        formValidationManager.registerField(node.id, 'checked', true);
-        formValidationManager.updateFieldValue(node.id, 'checked', checked);
-      }
-    }, [checked, node.id, node.props?.required]);
+      console.log(`[Registry] Switch node.id: ${node.id}, node.code: ${node.code}`);
+      // 注册所有Switch字段，不仅仅是required字段
+      formValidationManager.registerField(node.id, 'checked', node.props?.required || false, node.code);
+      formValidationManager.updateFieldValue(node.id, 'checked', checked);
+    }, [checked, node.id, node.props?.required, node.code]);
     
     return (
       <FormLabel 
@@ -1147,7 +1175,7 @@ export const registry: Record<string, Renderer> = {
         }
       };
 
-      const unsub = bus.subscribe('dataResolved', handleDataResolved);
+      const unsub = bus.subscribe('form.data.resolved', handleDataResolved);
       return () => unsub();
     }, [node.props?.id, node.props?.code]);
 
@@ -1328,20 +1356,90 @@ export const registry: Record<string, Renderer> = {
       </Card>
     );
   },
-  Listener: (node) => {
+  Listener: (node, ctx) => {
     const [text, setText] = useState<string>(node.props?.text ?? "监听器：等待事件");
+    const [error, setError] = useState<string | null>(null);
+    
     useEffect(() => {
       const topic = node.props?.listen as string | undefined;
       if (!topic) return;
+      
       const unsub = bus.subscribe(topic, (payload) => {
-        setText(String(payload ?? ""));
+        try {
+          // 如果有自定义脚本，执行脚本处理逻辑
+          if (node.props?.script) {
+            // 创建安全的执行环境
+            const scriptContext = {
+              payload,
+              nodeId: node.id,
+              topic,
+              setText: (newText: string) => setText(newText),
+              setError: (err: string) => setError(err),
+              console: {
+                log: (...args: any[]) => console.log('[Listener Script]', ...args),
+                error: (...args: any[]) => console.error('[Listener Script]', ...args),
+                warn: (...args: any[]) => console.warn('[Listener Script]', ...args)
+              },
+              // 提供常用的工具函数
+              JSON,
+              Date,
+              Math,
+              // 事件发布功能
+              publish: (eventTopic: string, data: any) => {
+                bus.publish(eventTopic, data);
+              },
+              // DOM操作辅助
+              getElementById: (id: string) => document.getElementById(id),
+              querySelector: (selector: string) => document.querySelector(selector)
+            };
+            
+            // 执行用户脚本
+            const scriptFunction = new Function(
+              'context',
+              `
+              const { payload, nodeId, topic, setText, setError, console, JSON, Date, Math, publish, getElementById, querySelector } = context;
+              try {
+                ${node.props.script}
+              } catch (error) {
+                setError('脚本执行错误: ' + error.message);
+                console.error('Script execution error:', error);
+              }
+              `
+            );
+            
+            scriptFunction(scriptContext);
+            setError(null);
+          } else {
+            // 默认行为：直接显示payload
+            setText(String(payload ?? ""));
+            setError(null);
+          }
+        } catch (err: any) {
+          setError('处理事件时发生错误: ' + err.message);
+          console.error('Listener error:', err);
+        }
       });
+      
       return () => unsub();
-    }, [node.props?.listen]);
+    }, [node.props?.listen, node.props?.script]);
+    
     return (
-      <span className="text-sm text-muted-foreground" id={node.id}>
-        {text}
-      </span>
+      <div className={cn("space-y-2", ctx?.design && "border border-dashed border-gray-300 p-2 rounded")} id={node.id}>
+        {ctx?.design && (
+          <div className="text-xs text-gray-500">
+            监听器: {node.props?.listen || '未设置事件'}
+            {node.props?.script && ' (自定义脚本)'}
+          </div>
+        )}
+        <span className="text-sm text-muted-foreground">
+          {text}
+        </span>
+        {error && (
+          <div className="text-xs text-red-500 bg-red-50 p-1 rounded">
+            {error}
+          </div>
+        )}
+      </div>
     );
   },
   Table: (node) => {
@@ -1857,6 +1955,56 @@ export const registry: Record<string, Renderer> = {
         >
           {node.props?.text || '提交'}
         </SubmitButton>
+      );
+    },
+    ScriptEditor: (node, ctx) => {
+      return (
+        <ScriptEditor
+          title={node.props?.title || 'JavaScript 脚本编写器'}
+          defaultScript={node.props?.defaultScript || ''}
+          onExecute={(result) => {
+            console.log('脚本执行结果:', result);
+            // 通过事件总线发布结果
+            bus.publish('script.executed', {
+              nodeId: node.id,
+              result,
+              timestamp: Date.now()
+            });
+          }}
+          onError={(error) => {
+            console.error('脚本执行错误:', error);
+            bus.publish('script.error', {
+              nodeId: node.id,
+              error,
+              timestamp: Date.now()
+            });
+          }}
+        />
+      );
+    },
+    EventListener: (node, ctx) => {
+      return (
+        <EventListener
+          title={node.props?.title || '事件监听器'}
+          defaultTopic={node.props?.topic || ''}
+          defaultScript={node.props?.script || ''}
+          onTopicChange={(topic) => {
+            // 可以通过事件通知属性变化
+            bus.publish('node.props.changed', {
+              nodeId: node.id,
+              prop: 'topic',
+              value: topic
+            });
+          }}
+          onScriptChange={(script) => {
+            // 可以通过事件通知属性变化
+            bus.publish('node.props.changed', {
+              nodeId: node.id,
+              prop: 'script',
+              value: script
+            });
+          }}
+        />
       );
     },
 };

@@ -37,7 +37,11 @@ export type ComponentType =
   | "Transfer"
   | "Upload"
   | "Iframe"
-  | "Tree";
+  | "Tree"
+  | "FormLabel"
+  | "SubmitButton"
+  | "ScriptEditor"
+  | "EventListener";
 
 export interface NodeMeta {
   id: NodeId;

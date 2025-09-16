@@ -55,7 +55,7 @@ export default function RunPage() {
       }
     };
 
-    const unsub = bus.subscribe('dataResolved', handleDataResolved);
+    const unsub = bus.subscribe('form.data.resolved', handleDataResolved);
     return () => unsub();
   }, [page?.id, page?.root?.code]);
 

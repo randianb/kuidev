@@ -13,10 +13,11 @@ import CommandK from "@/components/site/CommandK";
 import { getHandlers } from "@/lib/handlers";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import { bus } from "@/lib/eventBus";
+import { eventHandlerManager } from "@/lib/event-handler-manager";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Switch } from "@/components/ui/switch";
-import { ChevronUp, ChevronDown, Edit, X } from "lucide-react";
+import { ChevronUp, ChevronDown, Edit, X, Copy, Code } from "lucide-react";
 import Editor from "@monaco-editor/react";
 
 function Canvas({
@@ -996,8 +997,19 @@ function EventsPanel({
   const [codeEditorOpen, setCodeEditorOpen] = useState(false);
   const [editingCode, setEditingCode] = useState("");
   const [editingField, setEditingField] = useState<string | null>(null);
+  const [showExampleCode, setShowExampleCode] = useState<{[key: string]: boolean}>({});
   
   const handlers = Object.keys(getHandlers());
+
+  // 复制文本到剪贴板
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      // 可以添加一个toast提示
+    } catch (err) {
+      console.error('复制失败:', err);
+    }
+  };
   
   // 获取事件类型的中文标签
   const getEventTypeLabel = (type: string) => {
@@ -1037,6 +1049,28 @@ function EventsPanel({
     return descriptions[type] || "";
   };
   
+  // 保存代码编辑器中的脚本
+  const saveCode = () => {
+    if (!selected || !editingField) return;
+    
+    const events = selected.props?.events || [];
+    const eventIndex = parseInt(editingField.split('-')[1]);
+    
+    if (eventIndex >= 0 && eventIndex < events.length) {
+      const next = [...events];
+      next[eventIndex] = { ...next[eventIndex], script: editingCode };
+      
+      update({
+        ...selected,
+        props: { ...selected.props, events: next }
+      });
+    }
+    
+    setCodeEditorOpen(false);
+    setEditingField(null);
+    setEditingCode("");
+  };
+
   // 渲染表格事件的特殊参数配置
   const renderTableEventParams = (ev: any, idx: number, events: any[], set: (k: string, v: any) => void) => {
     const updateEventParam = (paramKey: string, value: any) => {
@@ -1238,14 +1272,7 @@ function EventsPanel({
     setCodeEditorOpen(true);
   };
 
-  const saveCode = () => {
-    if (editingField) {
-      set(editingField, editingCode);
-    }
-    setCodeEditorOpen(false);
-    setEditingField(null);
-    setEditingCode("");
-  };
+
 
   return (
     <div className="space-y-3 p-4">
@@ -1299,7 +1326,26 @@ function EventsPanel({
                 </Select>
               </div>
               <div>
-                <label className="text-xs text-muted-foreground">处理器</label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs text-muted-foreground">处理器</label>
+                  {ev.handler && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        const key = `${idx}-example`;
+                        setShowExampleCode(prev => ({
+                          ...prev,
+                          [key]: !prev[key]
+                        }));
+                      }}
+                      className="h-6 px-2 text-xs"
+                    >
+                      <Code className="w-3 h-3 mr-1" />
+                      示例
+                    </Button>
+                  )}
+                </div>
                 <Select
                   value={ev.handler}
                   onValueChange={(v) => {
@@ -1319,27 +1365,477 @@ function EventsPanel({
                     ))}
                   </SelectContent>
                 </Select>
+                
+                {/* 示例代码显示 */}
+                {ev.handler && showExampleCode[`${idx}-example`] && (
+                  <div className="mt-2 space-y-2">
+                    <div className="text-xs font-medium text-muted-foreground">示例代码</div>
+                    {(() => {
+                       // 合并用户配置的参数
+                       const customParams = {
+                         code: ev.handlerParams?.code || selected.props?.code || 'baseCard',
+                         ...(ev.handlerParams || {})
+                       };
+                       const exampleCode = eventHandlerManager.generateExampleCode(ev.handler, customParams);
+                      return (
+                        <div className="space-y-2">
+                          {/* JavaScript 示例 */}
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs text-muted-foreground">JavaScript 调用</span>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => copyToClipboard(exampleCode.javascript)}
+                                className="h-5 px-1"
+                              >
+                                <Copy className="w-3 h-3" />
+                              </Button>
+                            </div>
+                            <div className="p-2 bg-gray-50 rounded text-xs font-mono border">
+                              <pre className="whitespace-pre-wrap">{exampleCode.javascript}</pre>
+                            </div>
+                          </div>
+                          
+                          {/* cURL 示例 (仅对 resolvefetch 显示) */}
+                          {ev.handler === 'resolvefetch' && (
+                            <div>
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-xs text-muted-foreground">cURL 调用</span>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => copyToClipboard(exampleCode.curl)}
+                                  className="h-5 px-1"
+                                >
+                                  <Copy className="w-3 h-3" />
+                                </Button>
+                              </div>
+                              <div className="p-2 bg-gray-50 rounded text-xs font-mono border">
+                                <pre className="whitespace-pre-wrap">{exampleCode.curl}</pre>
+                              </div>
+                            </div>
+                          )}
+                          
+                          <div className="text-xs text-muted-foreground">
+                            {exampleCode.description}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
               </div>
             </div>
             
             {/* 表格事件的特殊参数配置 */}
             {selected.type === "Table" && renderTableEventParams(ev, idx, events, set)}
             
-            {/* 通用参数配置 */}
+            {/* resolvefetch 处理器的参数配置 */}
+            {ev.handler === 'resolvefetch' && (
+              <div className="space-y-2">
+                <div className="text-xs font-medium text-muted-foreground">处理器参数</div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs text-muted-foreground">获取实际表单数据</label>
+                    <Switch 
+                      checked={ev.handlerParams?.getFormData === true}
+                      onCheckedChange={(checked) => {
+                        const next = [...events];
+                        const handlerParams = next[idx].handlerParams || {};
+                        next[idx] = { 
+                          ...next[idx], 
+                          handlerParams: { ...handlerParams, getFormData: checked } 
+                        };
+                        set("events", next);
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">发送表单数据</label>
+                    <Switch 
+                      checked={ev.handlerParams?.sendFormData === true}
+                      onCheckedChange={(checked) => {
+                        const next = [...events];
+                        const handlerParams = next[idx].handlerParams || {};
+                        next[idx] = { 
+                          ...next[idx], 
+                          handlerParams: { ...handlerParams, sendFormData: checked } 
+                        };
+                        set("events", next);
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">直接返回表单数据</label>
+                    <Switch 
+                      checked={ev.handlerParams?.returnFormData === true}
+                      onCheckedChange={(checked) => {
+                        const next = [...events];
+                        const handlerParams = next[idx].handlerParams || {};
+                        next[idx] = { 
+                          ...next[idx], 
+                          handlerParams: { ...handlerParams, returnFormData: checked } 
+                        };
+                        set("events", next);
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">数据类型</label>
+                    <Select
+                      value={ev.handlerParams?.type || 'form'}
+                      onValueChange={(value) => {
+                        const next = [...events];
+                        const handlerParams = next[idx].handlerParams || {};
+                        next[idx] = { 
+                          ...next[idx], 
+                          handlerParams: { ...handlerParams, type: value } 
+                        };
+                        set("events", next);
+                      }}
+                    >
+                      <SelectTrigger className="h-8">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="form">form</SelectItem>
+                        <SelectItem value="data">data</SelectItem>
+                        <SelectItem value="config">config</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div>
+                    <label className="text-xs text-muted-foreground">代码/ID</label>
+                    <Input
+                      placeholder="例如: baseCard"
+                      value={ev.handlerParams?.code || ''}
+                      onChange={(e) => {
+                        const next = [...events];
+                        const handlerParams = next[idx].handlerParams || {};
+                        next[idx] = { 
+                          ...next[idx], 
+                          handlerParams: { ...handlerParams, code: e.target.value } 
+                        };
+                        set("events", next);
+                      }}
+                      className="h-8"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">数据ID (可选)</label>
+                    <Input
+                      placeholder="例如: item-123"
+                      value={ev.handlerParams?.id || ''}
+                      onChange={(e) => {
+                        const next = [...events];
+                        const handlerParams = next[idx].handlerParams || {};
+                        next[idx] = { 
+                          ...next[idx], 
+                          handlerParams: { ...handlerParams, id: e.target.value } 
+                        };
+                        set("events", next);
+                      }}
+                      className="h-8"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {/* openDialog 处理器的参数配置 */}
+            {ev.handler === 'openDialog' && (
+              <div className="space-y-2">
+                <div className="text-xs font-medium text-muted-foreground">对话框参数</div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs text-muted-foreground">标题</label>
+                    <Input
+                      placeholder="对话框标题"
+                      value={ev.handlerParams?.title || ''}
+                      onChange={(e) => {
+                        const next = [...events];
+                        const handlerParams = next[idx].handlerParams || {};
+                        next[idx] = { 
+                          ...next[idx], 
+                          handlerParams: { ...handlerParams, title: e.target.value } 
+                        };
+                        set("events", next);
+                      }}
+                      className="h-8"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">类型</label>
+                    <Select
+                      value={ev.handlerParams?.type || 'info'}
+                      onValueChange={(value) => {
+                        const next = [...events];
+                        const handlerParams = next[idx].handlerParams || {};
+                        next[idx] = { 
+                          ...next[idx], 
+                          handlerParams: { ...handlerParams, type: value } 
+                        };
+                        set("events", next);
+                      }}
+                    >
+                      <SelectTrigger className="h-8">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="info">信息</SelectItem>
+                        <SelectItem value="success">成功</SelectItem>
+                        <SelectItem value="warning">警告</SelectItem>
+                        <SelectItem value="error">错误</SelectItem>
+                        <SelectItem value="confirm">确认</SelectItem>
+                        <SelectItem value="custom">自定义</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">大小</label>
+                    <Select
+                      value={ev.handlerParams?.size || 'medium'}
+                      onValueChange={(value) => {
+                        const next = [...events];
+                        const handlerParams = next[idx].handlerParams || {};
+                        next[idx] = { 
+                          ...next[idx], 
+                          handlerParams: { ...handlerParams, size: value } 
+                        };
+                        set("events", next);
+                      }}
+                    >
+                      <SelectTrigger className="h-8">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="small">小</SelectItem>
+                        <SelectItem value="medium">中</SelectItem>
+                        <SelectItem value="large">大</SelectItem>
+                        <SelectItem value="fullscreen">全屏</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">图标</label>
+                    <Input
+                      placeholder="图标名称"
+                      value={ev.handlerParams?.icon || ''}
+                      onChange={(e) => {
+                        const next = [...events];
+                        const handlerParams = next[idx].handlerParams || {};
+                        next[idx] = { 
+                          ...next[idx], 
+                          handlerParams: { ...handlerParams, icon: e.target.value } 
+                        };
+                        set("events", next);
+                      }}
+                      className="h-8"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">内容</label>
+                  <Textarea
+                    placeholder="对话框内容或消息"
+                    value={ev.handlerParams?.content || ''}
+                    onChange={(e) => {
+                      const next = [...events];
+                      const handlerParams = next[idx].handlerParams || {};
+                      next[idx] = { 
+                        ...next[idx], 
+                        handlerParams: { ...handlerParams, content: e.target.value } 
+                      };
+                      set("events", next);
+                    }}
+                    className="min-h-[60px] resize-none"
+                  />
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <label className="text-xs text-muted-foreground">显示关闭按钮</label>
+                    <Switch 
+                      checked={ev.handlerParams?.showCloseButton !== false}
+                      onCheckedChange={(checked) => {
+                        const next = [...events];
+                        const handlerParams = next[idx].handlerParams || {};
+                        next[idx] = { 
+                          ...next[idx], 
+                          handlerParams: { ...handlerParams, showCloseButton: checked } 
+                        };
+                        set("events", next);
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">背景遮罩</label>
+                    <Switch 
+                      checked={ev.handlerParams?.backdrop !== false}
+                      onCheckedChange={(checked) => {
+                        const next = [...events];
+                        const handlerParams = next[idx].handlerParams || {};
+                        next[idx] = { 
+                          ...next[idx], 
+                          handlerParams: { ...handlerParams, backdrop: checked } 
+                        };
+                        set("events", next);
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">键盘ESC关闭</label>
+                    <Switch 
+                      checked={ev.handlerParams?.keyboard !== false}
+                      onCheckedChange={(checked) => {
+                        const next = [...events];
+                        const handlerParams = next[idx].handlerParams || {};
+                        next[idx] = { 
+                          ...next[idx], 
+                          handlerParams: { ...handlerParams, keyboard: checked } 
+                        };
+                        set("events", next);
+                      }}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs text-muted-foreground">确认按钮文本</label>
+                    <Input
+                      placeholder="确定"
+                      value={ev.handlerParams?.confirmText || ''}
+                      onChange={(e) => {
+                        const next = [...events];
+                        const handlerParams = next[idx].handlerParams || {};
+                        next[idx] = { 
+                          ...next[idx], 
+                          handlerParams: { ...handlerParams, confirmText: e.target.value } 
+                        };
+                        set("events", next);
+                      }}
+                      className="h-8"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">取消按钮文本</label>
+                    <Input
+                      placeholder="取消"
+                      value={ev.handlerParams?.cancelText || ''}
+                      onChange={(e) => {
+                        const next = [...events];
+                        const handlerParams = next[idx].handlerParams || {};
+                        next[idx] = { 
+                          ...next[idx], 
+                          handlerParams: { ...handlerParams, cancelText: e.target.value } 
+                        };
+                        set("events", next);
+                      }}
+                      className="h-8"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">自动关闭时间(毫秒)</label>
+                    <Input
+                      type="number"
+                      placeholder="0 = 不自动关闭"
+                      value={ev.handlerParams?.autoClose || ''}
+                      onChange={(e) => {
+                        const next = [...events];
+                        const handlerParams = next[idx].handlerParams || {};
+                        const value = e.target.value ? parseInt(e.target.value) : undefined;
+                        next[idx] = { 
+                          ...next[idx], 
+                          handlerParams: { ...handlerParams, autoClose: value } 
+                        };
+                        set("events", next);
+                      }}
+                      className="h-8"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">自定义CSS类名</label>
+                    <Input
+                      placeholder="custom-dialog-class"
+                      value={ev.handlerParams?.className || ''}
+                      onChange={(e) => {
+                        const next = [...events];
+                        const handlerParams = next[idx].handlerParams || {};
+                        next[idx] = { 
+                          ...next[idx], 
+                          handlerParams: { ...handlerParams, className: e.target.value } 
+                        };
+                        set("events", next);
+                      }}
+                      className="h-8"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div>
+                    <label className="text-xs text-muted-foreground">确认回调脚本</label>
+                    <Textarea
+                      placeholder="确认按钮点击时执行的JavaScript代码"
+                      value={ev.handlerParams?.onConfirm || ''}
+                      onChange={(e) => {
+                        const next = [...events];
+                        const handlerParams = next[idx].handlerParams || {};
+                        next[idx] = { 
+                          ...next[idx], 
+                          handlerParams: { ...handlerParams, onConfirm: e.target.value } 
+                        };
+                        set("events", next);
+                      }}
+                      className="min-h-[40px] resize-none font-mono text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">取消回调脚本</label>
+                    <Textarea
+                      placeholder="取消按钮点击时执行的JavaScript代码"
+                      value={ev.handlerParams?.onCancel || ''}
+                      onChange={(e) => {
+                        const next = [...events];
+                        const handlerParams = next[idx].handlerParams || {};
+                        next[idx] = { 
+                          ...next[idx], 
+                          handlerParams: { ...handlerParams, onCancel: e.target.value } 
+                        };
+                        set("events", next);
+                      }}
+                      className="min-h-[40px] resize-none font-mono text-xs"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {/* 事件处理脚本配置 */}
             <div>
-              <label className="text-xs text-muted-foreground">事件参数 (JSON)</label>
-              <Textarea
-                placeholder='{ "key": "value" }'
-                value={ev.params ? JSON.stringify(ev.params, null, 2) : ""}
-                onChange={(e) => {
-                  try {
-                    const next = [...events];
-                    next[idx] = { ...ev, params: e.target.value ? JSON.parse(e.target.value) : undefined };
-                    set("events", next);
-                  } catch {}
-                }}
-                className="h-20 text-xs font-mono"
-              />
+              <div className="flex items-center justify-between">
+                <label className="text-xs text-muted-foreground">事件处理脚本</label>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setEditingCode(ev.script || "// 编写事件处理脚本\n// 可用变量: event (事件数据), node (当前节点), ctx (上下文)\n\nconsole.log('事件触发:', event);");
+                    setEditingField(`event-${idx}`);
+                    setCodeEditorOpen(true);
+                  }}
+                >
+                  <Edit className="w-3 h-3 mr-1" />
+                  编辑脚本
+                </Button>
+              </div>
+              <div className="mt-1 p-2 bg-gray-50 rounded text-xs font-mono text-gray-600 min-h-[60px] border">
+                {ev.script ? (
+                  <div className="whitespace-pre-wrap">{ev.script.length > 100 ? ev.script.substring(0, 100) + '...' : ev.script}</div>
+                ) : (
+                  <div className="text-gray-400">点击"编辑脚本"按钮编写JavaScript代码</div>
+                )}
+              </div>
             </div>
             
             <div className="flex justify-between items-center">
@@ -1375,20 +1871,20 @@ function EventsPanel({
         open={codeEditorOpen}
         onOpenChange={(open) => {
           if (!open) {
-            setCodeEditorOpen(false);
-            setEditingField(null);
-            setEditingCode("");
+            // 关闭时自动保存
+            if (editingField && editingCode !== (selected?.props?.events?.[parseInt(editingField.split('-')[1])]?.script || "")) {
+              saveCode();
+            } else {
+              setCodeEditorOpen(false);
+              setEditingField(null);
+              setEditingCode("");
+            }
           }
         }}
         value={editingCode}
         onChange={setEditingCode}
-        title={`编辑 ${editingField} 代码`}
+        title={`编辑事件处理脚本`}
       />
-      <div className="flex gap-2 pt-2">
-        <Button size="sm" onClick={saveCode} disabled={!editingField}>
-          保存代码
-        </Button>
-      </div>
     </div>
   );
 }
@@ -1431,6 +1927,12 @@ function Inspector({
     const style = { ...(local.props?.style ?? {}) } as any;
     style[k] = v;
     set("style", style);
+  };
+
+  const setCode = (code: string) => {
+    const copy = { ...local, code } as NodeMeta;
+    setLocal(copy);
+    update(copy);
   };
 
   return (
@@ -1479,7 +1981,7 @@ function Inspector({
             </div>
             <div className="grid gap-2">
               <label className="text-xs">编码(Code)</label>
-              <Input value={local.code ?? ""} onChange={(e) => update({ ...local, code: e.target.value })} />
+              <Input value={local.code ?? ""} onChange={(e) => setCode(e.target.value)} />
             </div>
             <div className="grid gap-2">
               <label className="text-xs">文本/标题</label>
