@@ -1,3 +1,5 @@
+import { generateUUID } from "@/lib/utils";
+
 export type NodeId = string;
 
 export type ComponentType =
@@ -49,11 +51,16 @@ export interface NodeMeta {
   code?: string; // 组件编码（唯一标识，可用于数据绑定/resolvefetch）
   props?: Record<string, any>;
   children?: NodeMeta[];
-  layout?: "row" | "col";
+  layout?: "row" | "col" | "grid";
+  flexEnabled?: boolean; // 控制行/列布局是否使用flex自适应
+  alignItems?: "start" | "center" | "end" | "stretch"; // 控制容器内容对齐方式
   locked?: boolean; // 控制容器是否锁定（锁定后子组件不可选择修改）
   resizable?: boolean; // 控制容器分栏是否可调整
   resizableEnabled?: boolean; // 控制分栏调整功能是否启用
   panelSizes?: number[]; // 存储分栏大小（百分比）
+  gridCols?: number; // Grid布局的列数
+  gridRows?: number; // Grid布局的行数
+  gridGap?: number; // Grid布局的间距
   style?: Record<string, any>; // 内联样式
 }
 
@@ -62,6 +69,7 @@ export type TemplateKind = "blank" | "content" | "vscode" | "landing" | "email" 
 export interface PageMeta {
   id: string;
   name: string;
+  description?: string;
   template: TemplateKind;
   root: NodeMeta; // root container
   createdAt: number;
@@ -80,18 +88,23 @@ export interface CustomComponent {
 }
 
 export function createNode(type: ComponentType, partial?: Partial<NodeMeta>): NodeMeta {
-  return {
-    id: crypto.randomUUID(),
+  const baseNode = {
+    id: generateUUID(),
     type,
     code: partial?.code ?? "",
     props: {},
     children: [],
-    layout: "col",
+    layout: (type === "Container" ? "grid" : "col") as "row" | "col" | "grid", // Container默认使用grid布局
     locked: false, // 默认不锁定
     resizable: true, // 默认可调整分栏
     panelSizes: [], // 默认空数组，会根据子组件数量自动计算
+    gridCols: type === "Container" ? 3 : undefined, // Container默认3列
+    gridRows: type === "Container" ? undefined : undefined, // 行数自动
+    gridGap: type === "Container" ? 4 : undefined, // 默认间距4
     ...partial,
   };
+  
+  return baseNode;
 }
 
 export function createPage(name: string, template: TemplateKind): PageMeta {
@@ -162,8 +175,8 @@ export function createPage(name: string, template: TemplateKind): PageMeta {
   } else if (template === "landing") {
     root.layout = "col";
     root.children = [
-      createNode("Container", { props: { title: "头部", className: "h-[60px] min-h-[60px]" } }),
-      createNode("Container", { props: { title: "主体" } }),
+      createNode("Container", { props: { title: "头部", className: "h-[60px] min-h-[60px] flex-shrink-0" } }),
+      createNode("Container", { props: { title: "主体", className: "flex-1 min-h-0" } }),
     ];
   } else if (template === "email") {
     root.layout = "row";
@@ -231,5 +244,5 @@ export function createPage(name: string, template: TemplateKind): PageMeta {
   }
 
   const now = Date.now();
-  return { id: crypto.randomUUID(), name, template, root, createdAt: now, updatedAt: now };
+  return { id: generateUUID(), name, template, root, createdAt: now, updatedAt: now };
 }

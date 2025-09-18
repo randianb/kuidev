@@ -22,7 +22,26 @@ const handlers: Record<string, NamedHandler> = {
     ctx.publish(params?.topic ?? "app.event", params?.payload);
   },
   openDialog: (params, ctx) => {
-    ctx.publish("dialog.open", { title: params?.title ?? "提示", content: params?.content ?? "" });
+    const dialogData = { 
+      title: params?.title ?? "提示", 
+      content: params?.content ?? "",
+      type: params?.type ?? "info",
+      size: params?.size ?? "medium",
+      showCloseButton: params?.showCloseButton !== false,
+      backdrop: params?.backdrop !== false,
+      keyboard: params?.keyboard !== false,
+      autoClose: params?.autoClose,
+      onConfirm: params?.onConfirm,
+      onCancel: params?.onCancel,
+      confirmText: params?.confirmText ?? "确定",
+      cancelText: params?.cancelText ?? "取消",
+      icon: params?.icon,
+      className: params?.className,
+      // 新增页面支持
+      pageId: params?.pageId,
+      pageName: params?.pageName
+    };
+    ctx.publish("dialog.open", dialogData);
   },
   setTextById: (params, ctx) => {
     if (!params?.id) return;

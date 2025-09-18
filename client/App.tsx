@@ -12,6 +12,7 @@ import Header from "@/components/site/Header";
 import Guide from "./pages/Guide";
 import Studio from "./pages/Studio";
 import RunPage from "./pages/RunPage";
+import CleanPreview from "./pages/CleanPreview";
 
 const queryClient = new QueryClient();
 
@@ -29,6 +30,7 @@ const App = () => (
               <Route path="/guide" element={<Guide />} />
               <Route path="/studio" element={<Studio />} />
               <Route path="/p/:id" element={<RunPage />} />
+              <Route path="/preview/:id" element={<CleanPreview />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>

@@ -17,8 +17,9 @@ import { eventHandlerManager } from "@/lib/event-handler-manager";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Switch } from "@/components/ui/switch";
-import { ChevronUp, ChevronDown, Edit, X, Copy, Code } from "lucide-react";
+import { ChevronUp, ChevronDown, Edit, X, Copy, Code, FileText, Square, ExternalLink } from "lucide-react";
 import Editor from "@monaco-editor/react";
+import { generateUUID } from "@/lib/utils";
 
 function Canvas({
   page,
@@ -1638,22 +1639,80 @@ function EventsPanel({
                   </div>
                 </div>
                 <div>
-                  <label className="text-xs text-muted-foreground">内容</label>
-                  <Textarea
-                    placeholder="对话框内容或消息"
-                    value={ev.handlerParams?.content || ''}
-                    onChange={(e) => {
+                  <label className="text-xs text-muted-foreground">内容类型</label>
+                  <Select
+                    value={ev.handlerParams?.contentType || 'text'}
+                    onValueChange={(value) => {
                       const next = [...events];
                       const handlerParams = next[idx].handlerParams || {};
                       next[idx] = { 
                         ...next[idx], 
-                        handlerParams: { ...handlerParams, content: e.target.value } 
+                        handlerParams: { ...handlerParams, contentType: value } 
                       };
                       set("events", next);
                     }}
-                    className="min-h-[60px] resize-none"
-                  />
+                  >
+                    <SelectTrigger className="h-8">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="text">文本内容</SelectItem>
+                      <SelectItem value="page">页面内容</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
+                {ev.handlerParams?.contentType === 'page' ? (
+                  <div>
+                    <label className="text-xs text-muted-foreground">选择页面</label>
+                    <Select
+                      value={ev.handlerParams?.pageId || ''}
+                      onValueChange={(value) => {
+                        const next = [...events];
+                        const handlerParams = next[idx].handlerParams || {};
+                        const pages = loadPages();
+                        const selectedPage = pages.find(p => p.id === value);
+                        next[idx] = { 
+                          ...next[idx], 
+                          handlerParams: { 
+                            ...handlerParams, 
+                            pageId: value,
+                            pageName: selectedPage?.name || ''
+                          } 
+                        };
+                        set("events", next);
+                      }}
+                    >
+                      <SelectTrigger className="h-8">
+                        <SelectValue placeholder="选择要显示的页面" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {loadPages().map((page) => (
+                          <SelectItem key={page.id} value={page.id}>
+                            {page.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="text-xs text-muted-foreground">内容</label>
+                    <Textarea
+                      placeholder="对话框内容或消息"
+                      value={ev.handlerParams?.content || ''}
+                      onChange={(e) => {
+                        const next = [...events];
+                        const handlerParams = next[idx].handlerParams || {};
+                        next[idx] = { 
+                          ...next[idx], 
+                          handlerParams: { ...handlerParams, content: e.target.value } 
+                        };
+                        set("events", next);
+                      }}
+                      className="min-h-[60px] resize-none"
+                    />
+                  </div>
+                )}
                 <div className="grid grid-cols-3 gap-2">
                   <div>
                     <label className="text-xs text-muted-foreground">显示关闭按钮</label>
@@ -1900,6 +1959,8 @@ function Inspector({
   moveTo,
   autoClassHint,
   onSaveComponent,
+  page,
+  updatePage,
 }: {
   selected: NodeMeta | null;
   update: (node: NodeMeta) => void;
@@ -1911,11 +1972,260 @@ function Inspector({
   moveTo: (containerId: string) => void;
   autoClassHint: string | null;
   onSaveComponent: () => void;
+  page: PageMeta;
+  updatePage: (page: PageMeta) => void;
 }) {
   const [local, setLocal] = useState<NodeMeta | null>(selected);
 
   useEffect(() => setLocal(selected), [selected?.id]);
-  if (!local) return <div className="p-4 text-sm text-muted-foreground">选择一个组件以编辑属性</div>;
+
+  // 获取可转换的组件类型
+  const getConvertibleTypes = (currentType: string) => {
+    const typeGroups = {
+      // 容器与卡片类组件
+      containers: [
+        { value: "Container", label: "容器" },
+        { value: "Card", label: "基础卡片" },
+        { value: "CollapsibleCard", label: "可收缩卡片" },
+        { value: "ActionCard", label: "操作卡片" },
+        { value: "InfoCard", label: "信息卡片" },
+        { value: "StatsCard", label: "统计卡片" }
+      ],
+      // 表单组件
+      forms: [
+        { value: "Input", label: "输入框" },
+        { value: "Textarea", label: "多行输入" },
+        { value: "Select", label: "选择器" },
+        { value: "Switch", label: "开关" },
+        { value: "Slider", label: "滑块" }
+      ],
+      // 按钮类组件
+      buttons: [
+        { value: "Button", label: "按钮" },
+        { value: "SubmitButton", label: "提交按钮" }
+      ]
+    };
+
+    // 根据当前组件类型返回可转换的类型
+    if (typeGroups.containers.some(t => t.value === currentType)) {
+      return typeGroups.containers;
+    }
+    if (typeGroups.forms.some(t => t.value === currentType)) {
+      return typeGroups.forms;
+    }
+    if (typeGroups.buttons.some(t => t.value === currentType)) {
+      return typeGroups.buttons;
+    }
+    
+    // 默认返回当前类型
+    return [{ value: currentType, label: currentType }];
+  };
+
+  // 转换组件类型
+  const convertComponentType = (node: NodeMeta, newType: string) => {
+    const converted = { ...node, type: newType as any };
+    
+    // 保留通用属性
+    const commonProps = {
+      className: node.props?.className,
+      style: node.props?.style,
+      text: node.props?.text,
+      title: node.props?.title,
+      placeholder: node.props?.placeholder,
+      value: node.props?.value,
+      disabled: node.props?.disabled
+    };
+
+    // 容器类组件（可以包含子组件）
+    const containerTypes = ["Container", "Card", "CollapsibleCard", "ActionCard", "InfoCard", "StatsCard"];
+    const isSourceContainer = containerTypes.includes(node.type);
+    const isTargetContainer = containerTypes.includes(newType);
+
+    // 根据目标类型设置特定属性
+    switch (newType) {
+      case "Container":
+        converted.props = {
+          ...commonProps,
+          layout: node.layout || "col",
+          flexEnabled: node.flexEnabled,
+          alignItems: node.alignItems
+        };
+        // 保留容器特有属性
+        converted.layout = node.layout || "col";
+        converted.flexEnabled = node.flexEnabled;
+        converted.alignItems = node.alignItems;
+        converted.locked = node.locked;
+        converted.resizable = node.resizable;
+        converted.resizableEnabled = node.resizableEnabled;
+        converted.panelSizes = node.panelSizes;
+        break;
+      
+      case "Card":
+      case "CollapsibleCard":
+      case "ActionCard":
+      case "InfoCard":
+      case "StatsCard":
+        converted.props = {
+          ...commonProps,
+          title: node.props?.title || node.props?.text || "卡片标题",
+          description: node.props?.description
+        };
+        
+        if (newType === "CollapsibleCard") {
+          converted.props.defaultOpen = true;
+        }
+        if (newType === "ActionCard") {
+          converted.props.actionText = "操作";
+        }
+        if (newType === "InfoCard") {
+          converted.props.cardType = "info";
+        }
+        if (newType === "StatsCard") {
+          converted.props.label = "统计标签";
+          converted.props.value = "1,234";
+        }
+        break;
+      
+      case "Input":
+        converted.props = {
+          ...commonProps,
+          placeholder: node.props?.placeholder || "请输入...",
+          value: node.props?.value || (node.props?.checked ? "true" : ""),
+          type: node.props?.type || "text"
+        };
+        // 表单组件不能包含子组件，清空children
+        converted.children = undefined;
+        break;
+      
+      case "Textarea":
+        converted.props = {
+          ...commonProps,
+          placeholder: node.props?.placeholder || "请输入...",
+          value: node.props?.value || (node.props?.checked ? "true" : ""),
+          rows: node.props?.rows || 3
+        };
+        converted.children = undefined;
+        break;
+      
+      case "Select":
+        converted.props = {
+          ...commonProps,
+          placeholder: node.props?.placeholder || "请选择...",
+          value: node.props?.value || "",
+          options: node.props?.options || [
+            { value: "option1", label: "选项1" },
+            { value: "option2", label: "选项2" },
+            { value: "option3", label: "选项3" }
+          ]
+        };
+        converted.children = undefined;
+        break;
+      
+      case "Switch":
+        converted.props = {
+          ...commonProps,
+          checked: node.props?.checked !== undefined ? node.props.checked : 
+                   node.props?.value === "true" || node.props?.value === true || false,
+          label: node.props?.text || node.props?.title || "开关"
+        };
+        converted.children = undefined;
+        break;
+      
+      case "Slider":
+        converted.props = {
+          ...commonProps,
+          min: node.props?.min || 0,
+          max: node.props?.max || 100,
+          value: node.props?.value ? Number(node.props.value) || 50 : 50,
+          step: node.props?.step || 1
+        };
+        converted.children = undefined;
+        break;
+      
+      case "Button":
+      case "SubmitButton":
+        converted.props = {
+          ...commonProps,
+          text: node.props?.text || node.props?.title || "按钮",
+          variant: node.props?.variant || "default"
+        };
+        converted.children = undefined;
+        break;
+      
+      default:
+        converted.props = { ...commonProps };
+    }
+
+    // 处理子组件：只有容器类组件可以包含子组件
+    if (isTargetContainer && isSourceContainer) {
+      // 容器到容器的转换，保留子组件
+      converted.children = node.children;
+    } else if (!isTargetContainer && isSourceContainer && node.children?.length) {
+      // 从容器转换为非容器组件，子组件会丢失，可以在这里添加警告
+      console.warn(`转换 ${node.type} 到 ${newType} 将丢失 ${node.children.length} 个子组件`);
+    }
+
+    return converted;
+  };
+  
+  // 如果没有选中组件，显示页面属性编辑
+  if (!local) {
+    return (
+      <div className="space-y-3 p-4">
+        <div className="font-medium text-sm">页面属性</div>
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs text-muted-foreground">页面名称</label>
+            <Input
+              value={page.name}
+              onChange={(e) => updatePage({ ...page, name: e.target.value })}
+              placeholder="输入页面名称"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground">页面描述</label>
+            <Textarea
+              value={page.description || ''}
+              onChange={(e) => updatePage({ ...page, description: e.target.value })}
+              placeholder="输入页面描述"
+              className="min-h-[60px] resize-none"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground">页面类型</label>
+            <Select
+              value={page.template}
+              onValueChange={(value) => updatePage({ ...page, template: value as TemplateKind })}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="blank">空白页面</SelectItem>
+                <SelectItem value="content">内容页面</SelectItem>
+                <SelectItem value="vscode">VSCode风格</SelectItem>
+                <SelectItem value="landing">落地页</SelectItem>
+                <SelectItem value="email">邮件模板</SelectItem>
+                <SelectItem value="home">首页</SelectItem>
+                <SelectItem value="admin">管理后台</SelectItem>
+                <SelectItem value="grid">网格布局</SelectItem>
+                <SelectItem value="dashboard">仪表板</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="text-xs text-muted-foreground">
+            页面ID: {page.id}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            创建时间: {new Date(page.createdAt).toLocaleString()}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            更新时间: {new Date(page.updatedAt).toLocaleString()}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const set = (k: string, v: any) => {
     const copy = { ...local, props: { ...(local.props ?? {}), [k]: v } } as NodeMeta;
@@ -1986,6 +2296,29 @@ function Inspector({
             <div className="grid gap-2">
               <label className="text-xs">文本/标题</label>
               <Input value={local.props?.text ?? local.props?.title ?? ""} onChange={(e) => set("text", e.target.value)} />
+            </div>
+            
+            {/* 组件类型转换 */}
+            <div className="grid gap-2">
+              <label className="text-xs">组件类型转换</label>
+              <Select 
+                value={local.type} 
+                onValueChange={(newType) => {
+                  const convertedNode = convertComponentType(local, newType as any);
+                  update(convertedNode);
+                }}
+              >
+                <SelectTrigger className="h-8">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {getConvertibleTypes(local.type).map((type) => (
+                    <SelectItem key={type.value} value={type.value}>
+                      {type.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </AccordionContent>
         </AccordionItem>
@@ -2570,7 +2903,99 @@ function Inspector({
                 <Button size="sm" variant={local.layout === "col" ? "default" : "secondary"} onClick={() => update({ ...local, layout: "col" })}>
                   列
                 </Button>
+                <Button size="sm" variant={local.layout === "grid" ? "default" : "secondary"} onClick={() => update({ ...local, layout: "grid", gridCols: local.gridCols || 3, gridGap: local.gridGap || 4 })}>
+                  网格
+                </Button>
               </div>
+
+              {local.layout === "grid" && (
+                <div className="space-y-3 pt-2 border-t">
+                  <div className="text-xs font-medium">网格配置</div>
+                  
+                  <div className="grid gap-2">
+                    <label className="text-xs">列数</label>
+                    <Input 
+                      type="number"
+                      min="1"
+                      max="12"
+                      value={local.gridCols || 3} 
+                      onChange={(e) => {
+                        const cols = parseInt(e.target.value) || 3;
+                        update({ ...local, gridCols: cols });
+                      }}
+                      className="h-8"
+                    />
+                  </div>
+                  
+                  <div className="grid gap-2">
+                    <label className="text-xs">行数 (可选)</label>
+                    <Input 
+                      type="number"
+                      min="0"
+                      value={local.gridRows || ""} 
+                      onChange={(e) => {
+                        const rows = e.target.value ? parseInt(e.target.value) : undefined;
+                        update({ ...local, gridRows: rows });
+                      }}
+                      placeholder="自动"
+                      className="h-8"
+                    />
+                  </div>
+                  
+                  <div className="grid gap-2">
+                    <label className="text-xs">间距 (px)</label>
+                    <Input 
+                      type="number"
+                      min="0"
+                      value={local.gridGap || 4} 
+                      onChange={(e) => {
+                        const gap = parseInt(e.target.value) || 0;
+                        update({ ...local, gridGap: gap });
+                      }}
+                      className="h-8"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {(local.layout === "row" || local.layout === "col") && (
+                <div className="space-y-3 pt-2 border-t">
+                  <div className="flex items-center gap-2">
+                    <Switch 
+                      id="flexEnabled" 
+                      checked={local.flexEnabled === true} 
+                      onCheckedChange={(checked) => {
+                        const updated = { ...local, flexEnabled: checked };
+                        setLocal(updated);
+                        update(updated);
+                      }} 
+                    />
+                    <label htmlFor="flexEnabled" className="text-xs">启用Flex自适应布局</label>
+                  </div>
+                  
+                  <div className="grid gap-2">
+                    <label className="text-xs">内容对齐</label>
+                    <Select 
+                      value={local.alignItems || "start"} 
+                      onValueChange={(value) => {
+                        const updated = { ...local, alignItems: value as "start" | "center" | "end" | "stretch" };
+                        setLocal(updated);
+                        update(updated);
+                      }}
+                    >
+                      <SelectTrigger className="h-8">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="start">顶部/左侧</SelectItem>
+                        <SelectItem value="center">居中</SelectItem>
+                        <SelectItem value="end">底部/右侧</SelectItem>
+                        <SelectItem value="stretch">拉伸</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              )}
 
               <div className="flex items-center gap-2 pt-2">
                 <Switch 
@@ -3201,7 +3626,7 @@ export default function Studio() {
 
   const cloneNode = (n: NodeMeta): NodeMeta => ({
     ...n,
-    id: crypto.randomUUID(),
+    id: generateUUID(),
     children: n.children?.map(cloneNode) ?? [],
   });
 
@@ -3429,7 +3854,13 @@ export default function Studio() {
     }
   };
 
-  const goRun = () => navigate(`/p/${page.id}`);
+  const goRun = () => {
+    // 确保页面数据已保存到localStorage
+    upsertPage(page);
+    // 使用页面ID作为参数，更简洁
+    const previewUrl = `${window.location.origin}/preview.html?id=${page.id}`;
+    window.open(previewUrl, '_blank', 'noopener,noreferrer');
+  };
 
   const libItems = [
     { key: "Container", label: "容器" },
@@ -3684,7 +4115,7 @@ export default function Studio() {
     };
     const node = find(page.root);
     if (node) {
-      const clone = (() => ({ ...node, id: crypto.randomUUID(), children: node.children?.map((c) => ({ ...c, id: crypto.randomUUID() })) ?? [] }))();
+      const clone = (() => ({ ...node, id: generateUUID(), children: node.children?.map((c) => ({ ...c, id: generateUUID() })) ?? [] }))();
       (container.children = container.children ?? []).push(clone as any);
       commit({ ...page, updatedAt: Date.now() });
     }
@@ -3847,6 +4278,11 @@ export default function Studio() {
         <div className="flex items-center justify-between border-b px-3 py-2">
           <div className="font-medium">设计态 · {page.name}</div>
           <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={async () => {
+              const newPage = createPage("新页面", "content");
+              await upsertPage(newPage);
+              navigate(`/studio?id=${newPage.id}`);
+            }}>新增页面</Button>
             <Button variant="outline" onClick={undo} disabled={!history.length}>撤销</Button>
             <Button variant="outline" onClick={redo} disabled={!future.length}>重做</Button>
             <Button variant="destructive" disabled={!selectedId} onClick={() => selectedId && deleteNode(selectedId)}>删除</Button>
@@ -3923,6 +4359,11 @@ export default function Studio() {
                 return null;
               }, [page, selectedId])}
               onSaveComponent={openSaveComponentDialog}
+              page={page}
+              updatePage={(updatedPage) => {
+                setPage(updatedPage);
+                commit(updatedPage);
+              }}
             />
           </TabsContent>
           <TabsContent value="events">

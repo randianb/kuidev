@@ -390,8 +390,8 @@ export const registry: Record<string, Renderer> = {
       }}
 
       className={cn(
-        "relative rounded-md border border-dashed p-3",
-        ctx.design ? "hover:border-ring" : "border-transparent p-0",
+        "relative",
+        ctx.design ? "rounded-md border border-dashed p-3 hover:border-ring" : "border-transparent p-0 h-full",
         node.props?.className,
       )}
       data-node-id={node.id}
@@ -400,7 +400,71 @@ export const registry: Record<string, Renderer> = {
         <div className="pointer-events-auto">
           <div className="absolute inset-0 rounded-md ring-2 ring-blue-500/60 pointer-events-none" />
           {/* 根据布局方向显示不同的添加按钮 */}
-          {node.layout === "col" ? (
+          {node.layout === "grid" ? (
+            // Grid布局：中心添加按钮用于添加子元素，四周按钮用于插入兄弟元素
+            <>
+              {/* center - 在Grid容器内添加子元素 */}
+              <div className="absolute top-1/2 left-1/2 z-10 -translate-x-1/2 -translate-y-1/2">
+                <button
+                  className="rounded bg-background px-3 py-1 text-xs shadow-sm border font-medium"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    ctx.createChild?.(node.id, "Container");
+                  }}
+                >
+                  + 添加
+                </button>
+              </div>
+              {/* top - 在当前容器上方插入兄弟元素 */}
+              <div className="absolute -top-3 left-1/2 z-10 -translate-x-1/2">
+                <button
+                  className="rounded bg-background px-2 py-0.5 text-xs shadow-sm border"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    ctx.insertSibling?.(node.id, "top");
+                  }}
+                >
+                  ↑
+                </button>
+              </div>
+              {/* bottom - 在当前容器下方插入兄弟元素 */}
+              <div className="absolute -bottom-3 left-1/2 z-10 -translate-x-1/2">
+                <button
+                  className="rounded bg-background px-2 py-0.5 text-xs shadow-sm border"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    ctx.insertSibling?.(node.id, "bottom");
+                  }}
+                >
+                  ↓
+                </button>
+              </div>
+              {/* left - 在当前容器左侧插入兄弟元素 */}
+              <div className="absolute top-1/2 -left-3 z-10 -translate-y-1/2">
+                <button
+                  className="rounded bg-background px-1 py-0.5 text-xs shadow-sm border"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    ctx.insertSibling?.(node.id, "left");
+                  }}
+                >
+                  ←
+                </button>
+              </div>
+              {/* right - 在当前容器右侧插入兄弟元素 */}
+              <div className="absolute top-1/2 -right-3 z-10 -translate-y-1/2">
+                <button
+                  className="rounded bg-background px-1 py-0.5 text-xs shadow-sm border"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    ctx.insertSibling?.(node.id, "right");
+                  }}
+                >
+                  →
+                </button>
+              </div>
+            </>
+          ) : node.layout === "col" ? (
             // 列布局(垂直)：上下按钮控制子元素添加，左右按钮控制兄弟元素插入
             <>
               {/* top - 在容器内部顶部添加子元素 */}
@@ -550,21 +614,60 @@ export const registry: Record<string, Renderer> = {
             })}
           </ResizablePanelGroup>
         ) : (
-          <div className="min-h-[240px] flex items-center justify-center">
+          <div className={cn(
+            "flex items-center justify-center",
+            ctx.design ? "min-h-[240px]" : "h-full"
+          )}>
             <div className="pointer-events-none select-none text-center text-xs text-muted-foreground w-full py-10">
               空容器，拖拽组件到此
             </div>
           </div>
         )
+      ) : node.layout === "grid" ? (
+        <div 
+          className={cn(
+            "w-full",
+            ctx.design ? "min-h-[240px]" : "h-full"
+          )}
+          style={{
+            display: "grid",
+            gridTemplateColumns: `repeat(${node.gridCols || 3}, 1fr)`,
+            gridTemplateRows: node.gridRows ? `repeat(${node.gridRows}, 1fr)` : "auto",
+            gap: `${node.gridGap || 4}px`,
+          }}
+        >
+          {(node.children ?? []).map((child) => (
+            <div key={child.id} className="min-h-0">
+              <NodeRenderer node={child} ctx={ctx} />
+            </div>
+          ))}
+          {!node.children?.length && (
+            <div className="pointer-events-none select-none text-center text-xs text-muted-foreground w-full py-10 col-span-full">
+              空容器，拖拽组件到此
+            </div>
+          )}
+        </div>
       ) : (
         <div className={cn(
-          "min-h-[240px] flex gap-3",
-          node.layout === "col" ? "flex-col h-full" : "flex-row"
+          // 根据layout和flexEnabled决定布局方式
+          node.layout === "col" 
+            ? (node.flexEnabled ? "flex flex-col gap-3" : node.alignItems === "end" ? "flex flex-col gap-3 justify-end" : "space-y-3")
+            : "flex gap-3 flex-row",
+          // 添加alignItems支持 - 对于flex布局
+          node.alignItems && (node.flexEnabled ) && {
+            "items-start": node.alignItems === "start",
+            "items-center": node.alignItems === "center", 
+            "items-end": node.alignItems === "end",
+            "items-stretch": node.alignItems === "stretch"
+          },
+          ctx.design ? "min-h-[240px]" : "h-full"
         )}>
           {(node.children ?? []).map((child) => (
             <div key={child.id} className={cn(
-              node.layout === "row" ? "flex-1" : "",
-              node.layout === "col" ? "flex-1 min-h-0" : ""
+              // 只有在启用flex且为对应布局时才应用flex-1
+              (node.layout === "row" && node.flexEnabled) || 
+              (node.layout === "col" && node.flexEnabled) 
+                ? "flex-1" : ""
             )}>
               <NodeRenderer node={child} ctx={ctx} />
             </div>
@@ -2015,7 +2118,14 @@ export function NodeRenderer({ node, ctx }: { node: NodeMeta; ctx: any }) {
 
   if (!ctx?.design) {
     return (
-      <div id={node.id} className={node.props?.className} style={node.props?.style}>
+      <div 
+        id={node.id} 
+        className={cn(
+          node.type === "Container" ? "h-full" : "",
+          node.props?.className
+        )} 
+        style={node.props?.style}
+      >
         {Comp(node, ctx)}
       </div>
     );

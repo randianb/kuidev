@@ -91,20 +91,31 @@ export const HANDLER_TYPES: Record<string, HandlerType> = {
     eventTypes: ['dialog.open', 'dialog.show'],
     exampleCode: {
       curl: '# openDialog 处理器不支持 HTTP 调用',
-      javascript: `execHandler('openDialog', {
+      javascript: `// 文本内容对话框
+execHandler('openDialog', {
   title: '确认操作',
+  contentType: 'text',
   content: '您确定要执行此操作吗？',
   type: 'confirm',
-  size: 'medium',
-  showCloseButton: true,
-  backdrop: true,
-  keyboard: true
+  size: 'medium'
+});
+
+// 页面内容对话框
+execHandler('openDialog', {
+  title: '用户详情',
+  contentType: 'page',
+  pageId: 'user-detail-page',
+  pageName: '用户详情页面',
+  size: 'large'
 });`,
-      description: '打开一个对话框，支持多种类型和配置选项'
+      description: '打开一个对话框，支持文本内容或显示其他页面'
     },
     parameters: [
       { name: 'title', type: 'string', required: false, description: '对话框标题', defaultValue: '提示' },
-      { name: 'content', type: 'string', required: false, description: '对话框内容/消息', defaultValue: '' },
+      { name: 'contentType', type: 'string', required: false, description: '内容类型：text(文本) 或 page(页面)', defaultValue: 'text' },
+      { name: 'content', type: 'string', required: false, description: '对话框内容/消息（当contentType为text时使用）', defaultValue: '' },
+      { name: 'pageId', type: 'string', required: false, description: '要显示的页面ID（当contentType为page时使用）' },
+      { name: 'pageName', type: 'string', required: false, description: '要显示的页面名称（当contentType为page时使用）' },
       { name: 'type', type: 'string', required: false, description: '对话框类型', defaultValue: 'info' },
       { name: 'size', type: 'string', required: false, description: '对话框大小', defaultValue: 'medium' },
       { name: 'showCloseButton', type: 'boolean', required: false, description: '显示关闭按钮', defaultValue: true },
