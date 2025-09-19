@@ -20,6 +20,8 @@ import { Switch } from "@/components/ui/switch";
 import { ChevronUp, ChevronDown, Edit, X, Copy, Code, FileText, Square, ExternalLink } from "lucide-react";
 import Editor from "@monaco-editor/react";
 import { generateUUID } from "@/lib/utils";
+import { getSpacingClasses } from "@/studio/utils/spacing";
+import { migratePageSpacing } from "@/studio/utils/migration";
 
 function Canvas({
   page,
@@ -629,6 +631,367 @@ function ColumnManager({
         </DialogContent>
       </Dialog>
       
+    </>
+  );
+}
+
+// 可编辑表格列管理组件
+function EditableColumnManager({
+  columns,
+  onChange,
+}: {
+  columns: any[];
+  onChange: (columns: any[]) => void;
+}) {
+  const [showAddDialog, setShowAddDialog] = useState(false);
+  const [addMode, setAddMode] = useState<'form' | 'json'>('form');
+  const [multipleColumns, setMultipleColumns] = useState<any[]>([{
+    key: '',
+    title: '',
+    type: 'text',
+    width: undefined,
+    required: false,
+    editable: true,
+  }]);
+  const [jsonValue, setJsonValue] = useState('');
+  const [jsonError, setJsonError] = useState('');
+
+  const addNewColumnToList = () => {
+    setMultipleColumns([...multipleColumns, {
+      key: '',
+      title: '',
+      type: 'text',
+      width: undefined,
+      required: false,
+      editable: true,
+    }]);
+  };
+
+  const removeColumnFromList = (index: number) => {
+    if (multipleColumns.length > 1) {
+      setMultipleColumns(multipleColumns.filter((_, i) => i !== index));
+    }
+  };
+
+  const updateColumnInList = (index: number, updates: any) => {
+    const newColumns = [...multipleColumns];
+    newColumns[index] = { ...newColumns[index], ...updates };
+    setMultipleColumns(newColumns);
+  };
+
+  const handleAddColumn = () => {
+    if (addMode === 'form') {
+      // 验证表单模式的列
+      const validColumns = multipleColumns.filter(col => col.key && col.title);
+      if (validColumns.length === 0) {
+        return;
+      }
+      onChange([...columns, ...validColumns]);
+    } else {
+      // 验证JSON模式
+      try {
+        const parsed = JSON.parse(jsonValue);
+        const newColumns = Array.isArray(parsed) ? parsed : [parsed];
+        
+        // 验证必需字段
+        const validColumns = newColumns.filter(col => col.key && col.title);
+        if (validColumns.length === 0) {
+          setJsonError('至少需要一个包含 key 和 title 字段的有效列配置');
+          return;
+        }
+        
+        onChange([...columns, ...validColumns]);
+        setJsonError('');
+      } catch (error) {
+        setJsonError('JSON格式错误，请检查语法');
+        return;
+      }
+    }
+    
+    // 重置状态
+    setShowAddDialog(false);
+    setMultipleColumns([{
+      key: '',
+      title: '',
+      type: 'text',
+      width: undefined,
+      required: false,
+      editable: true,
+    }]);
+    setJsonValue('');
+    setJsonError('');
+  };
+
+  const deleteColumn = (index: number) => {
+    const newColumns = columns.filter((_, i) => i !== index);
+    onChange(newColumns);
+  };
+
+  const moveColumn = (fromIndex: number, toIndex: number) => {
+    const newColumns = [...columns];
+    const [movedColumn] = newColumns.splice(fromIndex, 1);
+    newColumns.splice(toIndex, 0, movedColumn);
+    onChange(newColumns);
+  };
+
+  return (
+    <>
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-medium">列配置</label>
+          <Button size="sm" onClick={() => setShowAddDialog(true)} className="h-6 px-2">
+            添加列
+          </Button>
+        </div>
+        
+        {columns.length === 0 ? (
+          <div className="text-center py-8 text-xs text-muted-foreground border border-dashed rounded">
+            暂无列配置，点击"添加列"开始配置
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {columns.map((column, index) => (
+              <div key={index} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50">
+                <div className="flex-1 space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">{column.title}</span>
+                    <span className="text-xs text-muted-foreground">({column.key})</span>
+                    {column.required && <span className="text-xs bg-red-100 text-red-700 px-1 rounded">必填</span>}
+                    {!column.editable && <span className="text-xs bg-gray-100 text-gray-700 px-1 rounded">只读</span>}
+                  </div>
+                  <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                    <span>宽度: {column.width || 'auto'}</span>
+                    <span>类型: {column.type}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1">
+                  {index > 0 && (
+                    <Button 
+                      size="sm" 
+                      variant="ghost" 
+                      onClick={() => moveColumn(index, index - 1)}
+                      className="h-6 w-6 p-0"
+                    >
+                      <ChevronUp className="h-3 w-3" />
+                    </Button>
+                  )}
+                  {index < columns.length - 1 && (
+                    <Button 
+                      size="sm" 
+                      variant="ghost" 
+                      onClick={() => moveColumn(index, index + 1)}
+                      className="h-6 w-6 p-0"
+                    >
+                      <ChevronDown className="h-3 w-3" />
+                    </Button>
+                  )}
+                  <Button 
+                    size="sm" 
+                    variant="ghost" 
+                    onClick={() => deleteColumn(index)}
+                    className="h-6 w-6 p-0 text-red-500"
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 添加列弹框 */}
+      <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>添加可编辑列</DialogTitle>
+          </DialogHeader>
+          
+          <Tabs value={addMode} onValueChange={(v) => setAddMode(v as 'form' | 'json')}>
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="form">表单模式</TabsTrigger>
+              <TabsTrigger value="json">JSON模式</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="form" className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-medium">列配置 ({multipleColumns.length}个)</h4>
+                <Button size="sm" onClick={addNewColumnToList}>
+                  添加列
+                </Button>
+              </div>
+              
+              <div className="max-h-96 overflow-y-auto space-y-4">
+                {multipleColumns.map((column, index) => (
+                  <div key={index} className="border rounded-lg p-4 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">列 {index + 1}</span>
+                      {multipleColumns.length > 1 && (
+                        <Button 
+                          size="sm" 
+                          variant="ghost" 
+                          onClick={() => removeColumnFromList(index)}
+                          className="h-6 w-6 p-0 text-red-500"
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-sm font-medium">字段名 *</label>
+                        <Input 
+                          value={column.key} 
+                          onChange={(e) => updateColumnInList(index, {key: e.target.value})}
+                          placeholder="例如: name, age, email"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium">标题 *</label>
+                        <Input 
+                          value={column.title} 
+                          onChange={(e) => updateColumnInList(index, {title: e.target.value})}
+                          placeholder="例如: 姓名, 年龄, 邮箱"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-3 gap-4">
+                      <div>
+                        <label className="text-sm font-medium">数据类型</label>
+                        <Select 
+                          value={column.type} 
+                          onValueChange={(v) => updateColumnInList(index, {type: v})}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="text">文本</SelectItem>
+                            <SelectItem value="number">数字</SelectItem>
+                            <SelectItem value="richtext">富文本</SelectItem>
+                            <SelectItem value="date">日期</SelectItem>
+                            <SelectItem value="select">下拉选择</SelectItem>
+                            <SelectItem value="multiselect">多选</SelectItem>
+                            <SelectItem value="lookup">查找</SelectItem>
+                            <SelectItem value="progress">进度条</SelectItem>
+                            <SelectItem value="link">链接</SelectItem>
+                            <SelectItem value="image">图片</SelectItem>
+                            <SelectItem value="file">文件</SelectItem>
+                            <SelectItem value="autonumber">自动编号</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium">宽度</label>
+                        <Input 
+                          value={column.width || ''} 
+                          onChange={(e) => updateColumnInList(index, {width: e.target.value || undefined})}
+                          placeholder="例如: 120, 20%, auto"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <Switch 
+                            checked={column.required}
+                            onCheckedChange={(checked) => updateColumnInList(index, {required: checked})}
+                          />
+                          <label className="text-sm">必填</label>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Switch 
+                            checked={column.editable}
+                            onCheckedChange={(checked) => updateColumnInList(index, {editable: checked})}
+                          />
+                          <label className="text-sm">可编辑</label>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {(column.type === 'select' || column.type === 'multiselect') && (
+                      <div>
+                        <label className="text-sm font-medium">选项配置</label>
+                        <Textarea 
+                          value={column.options ? JSON.stringify(column.options, null, 2) : '[]'} 
+                          onChange={(e) => {
+                            try {
+                              const options = JSON.parse(e.target.value || '[]');
+                              updateColumnInList(index, {options});
+                            } catch {}
+                          }}
+                          placeholder='[{"label": "选项1", "value": "value1"}, {"label": "选项2", "value": "value2"}]'
+                          rows={3}
+                        />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </TabsContent>
+            
+            <TabsContent value="json" className="space-y-4">
+              <div>
+                <label className="text-sm font-medium">JSON配置</label>
+                <p className="text-xs text-muted-foreground mb-2">
+                  请输入列的JSON配置，必须包含 key、title 和 type 字段
+                </p>
+                <Editor
+                  height="300px"
+                  defaultLanguage="json"
+                  value={jsonValue}
+                  onChange={(value) => {
+                    setJsonValue(value || '');
+                    setJsonError('');
+                  }}
+                  options={{
+                    minimap: { enabled: false },
+                    fontSize: 14,
+                    lineNumbers: 'on',
+                    scrollBeyondLastLine: false,
+                    automaticLayout: true,
+                  }}
+                />
+                {jsonError && (
+                  <p className="text-sm text-red-500 mt-2">{jsonError}</p>
+                )}
+              </div>
+              
+              <div className="bg-muted p-3 rounded text-xs">
+                <p className="font-medium mb-2">示例配置:</p>
+                <pre className="text-muted-foreground">{`[
+  {
+    "key": "name",
+    "title": "姓名",
+    "type": "text",
+    "width": "120px",
+    "required": true,
+    "editable": true
+  },
+  {
+    "key": "status",
+    "title": "状态",
+    "type": "select",
+    "options": [
+      {"label": "进行中", "value": "progress"},
+      {"label": "已完成", "value": "completed"}
+    ]
+  }
+]`}</pre>
+              </div>
+            </TabsContent>
+          </Tabs>
+          
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setShowAddDialog(false)}>
+              取消
+            </Button>
+            <Button onClick={handleAddColumn}>
+              添加
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
@@ -1985,11 +2348,12 @@ function Inspector({
       // 容器与卡片类组件
       containers: [
         { value: "Container", label: "容器" },
-        { value: "Card", label: "基础卡片" },
-        { value: "CollapsibleCard", label: "可收缩卡片" },
-        { value: "ActionCard", label: "操作卡片" },
-        { value: "InfoCard", label: "信息卡片" },
-        { value: "StatsCard", label: "统计卡片" }
+        { value: "Card", label: "基础卡片" }
+        // 暂时隐藏以下卡片类型：
+        // { value: "CollapsibleCard", label: "可收缩卡片" },
+        // { value: "ActionCard", label: "操作卡片" },
+        // { value: "InfoCard", label: "信息卡片" },
+        // { value: "StatsCard", label: "统计卡片" }
       ],
       // 表单组件
       forms: [
@@ -1997,12 +2361,22 @@ function Inspector({
         { value: "Textarea", label: "多行输入" },
         { value: "Select", label: "选择器" },
         { value: "Switch", label: "开关" },
-        { value: "Slider", label: "滑块" }
+        { value: "Slider", label: "滑块" },
+        { value: "NumberInput", label: "数字输入" },
+        { value: "RichTextEditor", label: "富文本编辑器" },
+        { value: "DatePicker", label: "日期选择器" },
+        { value: "MultiSelect", label: "多选框" },
+        { value: "Lookup", label: "查找选择器" }
       ],
       // 按钮类组件
       buttons: [
         { value: "Button", label: "按钮" },
         { value: "SubmitButton", label: "提交按钮" }
+      ],
+      // 展示组件
+      display: [
+        { value: "Link", label: "链接" },
+        { value: "Image", label: "图片" }
       ]
     };
 
@@ -2015,6 +2389,9 @@ function Inspector({
     }
     if (typeGroups.buttons.some(t => t.value === currentType)) {
       return typeGroups.buttons;
+    }
+    if (typeGroups.display.some(t => t.value === currentType)) {
+      return typeGroups.display;
     }
     
     // 默认返回当前类型
@@ -2075,10 +2452,13 @@ function Inspector({
           converted.props.defaultOpen = true;
         }
         if (newType === "ActionCard") {
-          converted.props.actionText = "操作";
+          converted.props.showHeaderButton = true;
+          converted.props.headerButtonText = "设置";
+          converted.props.cancelButtonText = "取消";
+          converted.props.confirmButtonText = "确认";
         }
         if (newType === "InfoCard") {
-          converted.props.cardType = "info";
+          converted.props.type = "info";
         }
         if (newType === "StatsCard") {
           converted.props.label = "统计标签";
@@ -2245,6 +2625,21 @@ function Inspector({
     update(copy);
   };
 
+  const setSpacing = (type: 'margin' | 'padding', direction: string, value: string) => {
+    const currentSpacing = local[type] || {};
+    const newSpacing = { ...currentSpacing };
+    
+    if (value === '' || value === '0' || value === 'none') {
+      delete newSpacing[direction as keyof typeof newSpacing];
+    } else {
+      (newSpacing as any)[direction] = value;
+    }
+    
+    const copy = { ...local, [type]: Object.keys(newSpacing).length > 0 ? newSpacing : undefined } as NodeMeta;
+    setLocal(copy);
+    update(copy);
+  };
+
   return (
     <div className="space-y-3 p-4">
       <div className="flex gap-2">
@@ -2332,6 +2727,388 @@ function Inspector({
               <label className="text-xs">CSS 类名</label>
               <Input value={local.props?.className ?? ""} onChange={(e) => set("className", e.target.value)} />
               {autoClassHint && <div className="text-[11px] text-muted-foreground">系统样式：{autoClassHint}</div>}
+            </div>
+            
+            {/* 外边距设置 */}
+            <div className="grid gap-2">
+              <label className="text-xs font-medium">外边距 (Margin)</label>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[11px] text-muted-foreground">全部</label>
+                  <Select value={local.margin?.all ?? "none"} onValueChange={(v) => setSpacing('margin', 'all', v)}>
+                    <SelectTrigger className="h-7">
+                      <SelectValue placeholder="选择" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">无</SelectItem>
+                      <SelectItem value="0">0 (0px)</SelectItem>
+                      <SelectItem value="px">px (1px)</SelectItem>
+                      <SelectItem value="0.5">0.5 (2px)</SelectItem>
+                      <SelectItem value="1">1 (4px)</SelectItem>
+                      <SelectItem value="1.5">1.5 (6px)</SelectItem>
+                      <SelectItem value="2">2 (8px)</SelectItem>
+                      <SelectItem value="2.5">2.5 (10px)</SelectItem>
+                      <SelectItem value="3">3 (12px)</SelectItem>
+                      <SelectItem value="3.5">3.5 (14px)</SelectItem>
+                      <SelectItem value="4">4 (16px)</SelectItem>
+                      <SelectItem value="5">5 (20px)</SelectItem>
+                      <SelectItem value="6">6 (24px)</SelectItem>
+                      <SelectItem value="7">7 (28px)</SelectItem>
+                      <SelectItem value="8">8 (32px)</SelectItem>
+                      <SelectItem value="9">9 (36px)</SelectItem>
+                      <SelectItem value="10">10 (40px)</SelectItem>
+                      <SelectItem value="11">11 (44px)</SelectItem>
+                      <SelectItem value="12">12 (48px)</SelectItem>
+                      <SelectItem value="14">14 (56px)</SelectItem>
+                      <SelectItem value="16">16 (64px)</SelectItem>
+                      <SelectItem value="20">20 (80px)</SelectItem>
+                      <SelectItem value="24">24 (96px)</SelectItem>
+                      <SelectItem value="28">28 (112px)</SelectItem>
+                      <SelectItem value="32">32 (128px)</SelectItem>
+                      <SelectItem value="36">36 (144px)</SelectItem>
+                      <SelectItem value="40">40 (160px)</SelectItem>
+                      <SelectItem value="44">44 (176px)</SelectItem>
+                      <SelectItem value="48">48 (192px)</SelectItem>
+                      <SelectItem value="52">52 (208px)</SelectItem>
+                      <SelectItem value="56">56 (224px)</SelectItem>
+                      <SelectItem value="60">60 (240px)</SelectItem>
+                      <SelectItem value="64">64 (256px)</SelectItem>
+                      <SelectItem value="72">72 (288px)</SelectItem>
+                      <SelectItem value="80">80 (320px)</SelectItem>
+                      <SelectItem value="96">96 (384px)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-[11px] text-muted-foreground">水平 (X)</label>
+                  <Select value={local.margin?.x ?? "none"} onValueChange={(v) => setSpacing('margin', 'x', v)}>
+                    <SelectTrigger className="h-7">
+                      <SelectValue placeholder="选择" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">无</SelectItem>
+                      <SelectItem value="0">0 (0px)</SelectItem>
+                      <SelectItem value="px">px (1px)</SelectItem>
+                      <SelectItem value="0.5">0.5 (2px)</SelectItem>
+                      <SelectItem value="1">1 (4px)</SelectItem>
+                      <SelectItem value="1.5">1.5 (6px)</SelectItem>
+                      <SelectItem value="2">2 (8px)</SelectItem>
+                      <SelectItem value="2.5">2.5 (10px)</SelectItem>
+                      <SelectItem value="3">3 (12px)</SelectItem>
+                      <SelectItem value="3.5">3.5 (14px)</SelectItem>
+                      <SelectItem value="4">4 (16px)</SelectItem>
+                      <SelectItem value="5">5 (20px)</SelectItem>
+                      <SelectItem value="6">6 (24px)</SelectItem>
+                      <SelectItem value="7">7 (28px)</SelectItem>
+                      <SelectItem value="8">8 (32px)</SelectItem>
+                      <SelectItem value="9">9 (36px)</SelectItem>
+                      <SelectItem value="10">10 (40px)</SelectItem>
+                      <SelectItem value="11">11 (44px)</SelectItem>
+                      <SelectItem value="12">12 (48px)</SelectItem>
+                      <SelectItem value="14">14 (56px)</SelectItem>
+                      <SelectItem value="16">16 (64px)</SelectItem>
+                      <SelectItem value="20">20 (80px)</SelectItem>
+                      <SelectItem value="24">24 (96px)</SelectItem>
+                      <SelectItem value="28">28 (112px)</SelectItem>
+                      <SelectItem value="32">32 (128px)</SelectItem>
+                      <SelectItem value="36">36 (144px)</SelectItem>
+                      <SelectItem value="40">40 (160px)</SelectItem>
+                      <SelectItem value="44">44 (176px)</SelectItem>
+                      <SelectItem value="48">48 (192px)</SelectItem>
+                      <SelectItem value="52">52 (208px)</SelectItem>
+                      <SelectItem value="56">56 (224px)</SelectItem>
+                      <SelectItem value="60">60 (240px)</SelectItem>
+                      <SelectItem value="64">64 (256px)</SelectItem>
+                      <SelectItem value="72">72 (288px)</SelectItem>
+                      <SelectItem value="80">80 (320px)</SelectItem>
+                      <SelectItem value="96">96 (384px)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-[11px] text-muted-foreground">垂直 (Y)</label>
+                  <Select value={local.margin?.y ?? "none"} onValueChange={(v) => setSpacing('margin', 'y', v)}>
+                    <SelectTrigger className="h-7">
+                      <SelectValue placeholder="选择" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">无</SelectItem>
+                      <SelectItem value="0">0 (0px)</SelectItem>
+                      <SelectItem value="px">px (1px)</SelectItem>
+                      <SelectItem value="0.5">0.5 (2px)</SelectItem>
+                      <SelectItem value="1">1 (4px)</SelectItem>
+                      <SelectItem value="1.5">1.5 (6px)</SelectItem>
+                      <SelectItem value="2">2 (8px)</SelectItem>
+                      <SelectItem value="2.5">2.5 (10px)</SelectItem>
+                      <SelectItem value="3">3 (12px)</SelectItem>
+                      <SelectItem value="3.5">3.5 (14px)</SelectItem>
+                      <SelectItem value="4">4 (16px)</SelectItem>
+                      <SelectItem value="5">5 (20px)</SelectItem>
+                      <SelectItem value="6">6 (24px)</SelectItem>
+                      <SelectItem value="7">7 (28px)</SelectItem>
+                      <SelectItem value="8">8 (32px)</SelectItem>
+                      <SelectItem value="9">9 (36px)</SelectItem>
+                      <SelectItem value="10">10 (40px)</SelectItem>
+                      <SelectItem value="11">11 (44px)</SelectItem>
+                      <SelectItem value="12">12 (48px)</SelectItem>
+                      <SelectItem value="14">14 (56px)</SelectItem>
+                      <SelectItem value="16">16 (64px)</SelectItem>
+                      <SelectItem value="20">20 (80px)</SelectItem>
+                      <SelectItem value="24">24 (96px)</SelectItem>
+                      <SelectItem value="28">28 (112px)</SelectItem>
+                      <SelectItem value="32">32 (128px)</SelectItem>
+                      <SelectItem value="36">36 (144px)</SelectItem>
+                      <SelectItem value="40">40 (160px)</SelectItem>
+                      <SelectItem value="44">44 (176px)</SelectItem>
+                      <SelectItem value="48">48 (192px)</SelectItem>
+                      <SelectItem value="52">52 (208px)</SelectItem>
+                      <SelectItem value="56">56 (224px)</SelectItem>
+                      <SelectItem value="60">60 (240px)</SelectItem>
+                      <SelectItem value="64">64 (256px)</SelectItem>
+                      <SelectItem value="72">72 (288px)</SelectItem>
+                      <SelectItem value="80">80 (320px)</SelectItem>
+                      <SelectItem value="96">96 (384px)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-[11px] text-muted-foreground">上</label>
+                  <Select value={local.margin?.top ?? "none"} onValueChange={(v) => setSpacing('margin', 'top', v)}>
+                    <SelectTrigger className="h-7">
+                      <SelectValue placeholder="选择" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">无</SelectItem>
+                      <SelectItem value="0">0 (0px)</SelectItem>
+                      <SelectItem value="px">px (1px)</SelectItem>
+                      <SelectItem value="0.5">0.5 (2px)</SelectItem>
+                      <SelectItem value="1">1 (4px)</SelectItem>
+                      <SelectItem value="1.5">1.5 (6px)</SelectItem>
+                      <SelectItem value="2">2 (8px)</SelectItem>
+                      <SelectItem value="2.5">2.5 (10px)</SelectItem>
+                      <SelectItem value="3">3 (12px)</SelectItem>
+                      <SelectItem value="3.5">3.5 (14px)</SelectItem>
+                      <SelectItem value="4">4 (16px)</SelectItem>
+                      <SelectItem value="5">5 (20px)</SelectItem>
+                      <SelectItem value="6">6 (24px)</SelectItem>
+                      <SelectItem value="7">7 (28px)</SelectItem>
+                      <SelectItem value="8">8 (32px)</SelectItem>
+                      <SelectItem value="9">9 (36px)</SelectItem>
+                      <SelectItem value="10">10 (40px)</SelectItem>
+                      <SelectItem value="11">11 (44px)</SelectItem>
+                      <SelectItem value="12">12 (48px)</SelectItem>
+                      <SelectItem value="14">14 (56px)</SelectItem>
+                      <SelectItem value="16">16 (64px)</SelectItem>
+                      <SelectItem value="20">20 (80px)</SelectItem>
+                      <SelectItem value="24">24 (96px)</SelectItem>
+                      <SelectItem value="28">28 (112px)</SelectItem>
+                      <SelectItem value="32">32 (128px)</SelectItem>
+                      <SelectItem value="36">36 (144px)</SelectItem>
+                      <SelectItem value="40">40 (160px)</SelectItem>
+                      <SelectItem value="44">44 (176px)</SelectItem>
+                      <SelectItem value="48">48 (192px)</SelectItem>
+                      <SelectItem value="52">52 (208px)</SelectItem>
+                      <SelectItem value="56">56 (224px)</SelectItem>
+                      <SelectItem value="60">60 (240px)</SelectItem>
+                      <SelectItem value="64">64 (256px)</SelectItem>
+                      <SelectItem value="72">72 (288px)</SelectItem>
+                      <SelectItem value="80">80 (320px)</SelectItem>
+                      <SelectItem value="96">96 (384px)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+            
+            {/* 内边距设置 */}
+            <div className="grid gap-2">
+              <label className="text-xs font-medium">内边距 (Padding)</label>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[11px] text-muted-foreground">全部</label>
+                  <Select value={local.padding?.all ?? "none"} onValueChange={(v) => setSpacing('padding', 'all', v)}>
+                    <SelectTrigger className="h-7">
+                      <SelectValue placeholder="选择" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">无</SelectItem>
+                      <SelectItem value="0">0 (0px)</SelectItem>
+                      <SelectItem value="px">px (1px)</SelectItem>
+                      <SelectItem value="0.5">0.5 (2px)</SelectItem>
+                      <SelectItem value="1">1 (4px)</SelectItem>
+                      <SelectItem value="1.5">1.5 (6px)</SelectItem>
+                      <SelectItem value="2">2 (8px)</SelectItem>
+                      <SelectItem value="2.5">2.5 (10px)</SelectItem>
+                      <SelectItem value="3">3 (12px)</SelectItem>
+                      <SelectItem value="3.5">3.5 (14px)</SelectItem>
+                      <SelectItem value="4">4 (16px)</SelectItem>
+                      <SelectItem value="5">5 (20px)</SelectItem>
+                      <SelectItem value="6">6 (24px)</SelectItem>
+                      <SelectItem value="7">7 (28px)</SelectItem>
+                      <SelectItem value="8">8 (32px)</SelectItem>
+                      <SelectItem value="9">9 (36px)</SelectItem>
+                      <SelectItem value="10">10 (40px)</SelectItem>
+                      <SelectItem value="11">11 (44px)</SelectItem>
+                      <SelectItem value="12">12 (48px)</SelectItem>
+                      <SelectItem value="14">14 (56px)</SelectItem>
+                      <SelectItem value="16">16 (64px)</SelectItem>
+                      <SelectItem value="20">20 (80px)</SelectItem>
+                      <SelectItem value="24">24 (96px)</SelectItem>
+                      <SelectItem value="28">28 (112px)</SelectItem>
+                      <SelectItem value="32">32 (128px)</SelectItem>
+                      <SelectItem value="36">36 (144px)</SelectItem>
+                      <SelectItem value="40">40 (160px)</SelectItem>
+                      <SelectItem value="44">44 (176px)</SelectItem>
+                      <SelectItem value="48">48 (192px)</SelectItem>
+                      <SelectItem value="52">52 (208px)</SelectItem>
+                      <SelectItem value="56">56 (224px)</SelectItem>
+                      <SelectItem value="60">60 (240px)</SelectItem>
+                      <SelectItem value="64">64 (256px)</SelectItem>
+                      <SelectItem value="72">72 (288px)</SelectItem>
+                      <SelectItem value="80">80 (320px)</SelectItem>
+                      <SelectItem value="96">96 (384px)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-[11px] text-muted-foreground">水平 (X)</label>
+                  <Select value={local.padding?.x ?? "none"} onValueChange={(v) => setSpacing('padding', 'x', v)}>
+                    <SelectTrigger className="h-7">
+                      <SelectValue placeholder="选择" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">无</SelectItem>
+                      <SelectItem value="0">0 (0px)</SelectItem>
+                      <SelectItem value="px">px (1px)</SelectItem>
+                      <SelectItem value="0.5">0.5 (2px)</SelectItem>
+                      <SelectItem value="1">1 (4px)</SelectItem>
+                      <SelectItem value="1.5">1.5 (6px)</SelectItem>
+                      <SelectItem value="2">2 (8px)</SelectItem>
+                      <SelectItem value="2.5">2.5 (10px)</SelectItem>
+                      <SelectItem value="3">3 (12px)</SelectItem>
+                      <SelectItem value="3.5">3.5 (14px)</SelectItem>
+                      <SelectItem value="4">4 (16px)</SelectItem>
+                      <SelectItem value="5">5 (20px)</SelectItem>
+                      <SelectItem value="6">6 (24px)</SelectItem>
+                      <SelectItem value="7">7 (28px)</SelectItem>
+                      <SelectItem value="8">8 (32px)</SelectItem>
+                      <SelectItem value="9">9 (36px)</SelectItem>
+                      <SelectItem value="10">10 (40px)</SelectItem>
+                      <SelectItem value="11">11 (44px)</SelectItem>
+                      <SelectItem value="12">12 (48px)</SelectItem>
+                      <SelectItem value="14">14 (56px)</SelectItem>
+                      <SelectItem value="16">16 (64px)</SelectItem>
+                      <SelectItem value="20">20 (80px)</SelectItem>
+                      <SelectItem value="24">24 (96px)</SelectItem>
+                      <SelectItem value="28">28 (112px)</SelectItem>
+                      <SelectItem value="32">32 (128px)</SelectItem>
+                      <SelectItem value="36">36 (144px)</SelectItem>
+                      <SelectItem value="40">40 (160px)</SelectItem>
+                      <SelectItem value="44">44 (176px)</SelectItem>
+                      <SelectItem value="48">48 (192px)</SelectItem>
+                      <SelectItem value="52">52 (208px)</SelectItem>
+                      <SelectItem value="56">56 (224px)</SelectItem>
+                      <SelectItem value="60">60 (240px)</SelectItem>
+                      <SelectItem value="64">64 (256px)</SelectItem>
+                      <SelectItem value="72">72 (288px)</SelectItem>
+                      <SelectItem value="80">80 (320px)</SelectItem>
+                      <SelectItem value="96">96 (384px)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-[11px] text-muted-foreground">垂直 (Y)</label>
+                  <Select value={local.padding?.y ?? "none"} onValueChange={(v) => setSpacing('padding', 'y', v)}>
+                    <SelectTrigger className="h-7">
+                      <SelectValue placeholder="选择" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">无</SelectItem>
+                      <SelectItem value="0">0 (0px)</SelectItem>
+                      <SelectItem value="px">px (1px)</SelectItem>
+                      <SelectItem value="0.5">0.5 (2px)</SelectItem>
+                      <SelectItem value="1">1 (4px)</SelectItem>
+                      <SelectItem value="1.5">1.5 (6px)</SelectItem>
+                      <SelectItem value="2">2 (8px)</SelectItem>
+                      <SelectItem value="2.5">2.5 (10px)</SelectItem>
+                      <SelectItem value="3">3 (12px)</SelectItem>
+                      <SelectItem value="3.5">3.5 (14px)</SelectItem>
+                      <SelectItem value="4">4 (16px)</SelectItem>
+                      <SelectItem value="5">5 (20px)</SelectItem>
+                      <SelectItem value="6">6 (24px)</SelectItem>
+                      <SelectItem value="7">7 (28px)</SelectItem>
+                      <SelectItem value="8">8 (32px)</SelectItem>
+                      <SelectItem value="9">9 (36px)</SelectItem>
+                      <SelectItem value="10">10 (40px)</SelectItem>
+                      <SelectItem value="11">11 (44px)</SelectItem>
+                      <SelectItem value="12">12 (48px)</SelectItem>
+                      <SelectItem value="14">14 (56px)</SelectItem>
+                      <SelectItem value="16">16 (64px)</SelectItem>
+                      <SelectItem value="20">20 (80px)</SelectItem>
+                      <SelectItem value="24">24 (96px)</SelectItem>
+                      <SelectItem value="28">28 (112px)</SelectItem>
+                      <SelectItem value="32">32 (128px)</SelectItem>
+                      <SelectItem value="36">36 (144px)</SelectItem>
+                      <SelectItem value="40">40 (160px)</SelectItem>
+                      <SelectItem value="44">44 (176px)</SelectItem>
+                      <SelectItem value="48">48 (192px)</SelectItem>
+                      <SelectItem value="52">52 (208px)</SelectItem>
+                      <SelectItem value="56">56 (224px)</SelectItem>
+                      <SelectItem value="60">60 (240px)</SelectItem>
+                      <SelectItem value="64">64 (256px)</SelectItem>
+                      <SelectItem value="72">72 (288px)</SelectItem>
+                      <SelectItem value="80">80 (320px)</SelectItem>
+                      <SelectItem value="96">96 (384px)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-[11px] text-muted-foreground">上</label>
+                  <Select value={local.padding?.top ?? "none"} onValueChange={(v) => setSpacing('padding', 'top', v)}>
+                    <SelectTrigger className="h-7">
+                      <SelectValue placeholder="选择" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">无</SelectItem>
+                      <SelectItem value="0">0 (0px)</SelectItem>
+                      <SelectItem value="px">px (1px)</SelectItem>
+                      <SelectItem value="0.5">0.5 (2px)</SelectItem>
+                      <SelectItem value="1">1 (4px)</SelectItem>
+                      <SelectItem value="1.5">1.5 (6px)</SelectItem>
+                      <SelectItem value="2">2 (8px)</SelectItem>
+                      <SelectItem value="2.5">2.5 (10px)</SelectItem>
+                      <SelectItem value="3">3 (12px)</SelectItem>
+                      <SelectItem value="3.5">3.5 (14px)</SelectItem>
+                      <SelectItem value="4">4 (16px)</SelectItem>
+                      <SelectItem value="5">5 (20px)</SelectItem>
+                      <SelectItem value="6">6 (24px)</SelectItem>
+                      <SelectItem value="7">7 (28px)</SelectItem>
+                      <SelectItem value="8">8 (32px)</SelectItem>
+                      <SelectItem value="9">9 (36px)</SelectItem>
+                      <SelectItem value="10">10 (40px)</SelectItem>
+                      <SelectItem value="11">11 (44px)</SelectItem>
+                      <SelectItem value="12">12 (48px)</SelectItem>
+                      <SelectItem value="14">14 (56px)</SelectItem>
+                      <SelectItem value="16">16 (64px)</SelectItem>
+                      <SelectItem value="20">20 (80px)</SelectItem>
+                      <SelectItem value="24">24 (96px)</SelectItem>
+                      <SelectItem value="28">28 (112px)</SelectItem>
+                      <SelectItem value="32">32 (128px)</SelectItem>
+                      <SelectItem value="36">36 (144px)</SelectItem>
+                      <SelectItem value="40">40 (160px)</SelectItem>
+                      <SelectItem value="44">44 (176px)</SelectItem>
+                      <SelectItem value="48">48 (192px)</SelectItem>
+                      <SelectItem value="52">52 (208px)</SelectItem>
+                      <SelectItem value="56">56 (224px)</SelectItem>
+                      <SelectItem value="60">60 (240px)</SelectItem>
+                      <SelectItem value="64">64 (256px)</SelectItem>
+                      <SelectItem value="72">72 (288px)</SelectItem>
+                      <SelectItem value="80">80 (320px)</SelectItem>
+                      <SelectItem value="96">96 (384px)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
             </div>
           </AccordionContent>
         </AccordionItem>
@@ -2596,7 +3373,7 @@ function Inspector({
                   }} />
                 </div>
               )}
-              <ColumnManager
+              <EditableColumnManager
                  columns={local.props?.columns ?? []}
                  onChange={(columns) => set("columns", columns)}
                />
@@ -2885,6 +3662,403 @@ function Inspector({
                    </div>
                  </div>
                </div>
+            </AccordionContent>
+          </AccordionItem>
+        )}
+
+        {local.type === "EditableTable" && (
+          <AccordionItem value="editable-table-config">
+            <AccordionTrigger className="text-sm font-medium">
+              可编辑表格配置
+            </AccordionTrigger>
+            <AccordionContent className="space-y-3">
+              <div className="grid gap-2">
+                <label className="text-xs">数据源</label>
+                <Select value={local.props?.dataSource ?? "static"} onValueChange={(v) => set("dataSource", v)}>
+                  <SelectTrigger className="h-8">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="static">静态</SelectItem>
+                    <SelectItem value="url">接口 URL</SelectItem>
+                    <SelectItem value="topic">事件主题</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {local.props?.dataSource === "url" && (
+                <div className="grid gap-2">
+                  <label className="text-xs">URL</label>
+                  <Input value={local.props?.url ?? ""} onChange={(e) => set("url", e.target.value)} />
+                </div>
+              )}
+              {local.props?.dataSource === "topic" && (
+                <div className="grid gap-2">
+                  <label className="text-xs">订阅主题</label>
+                  <Input value={local.props?.topic ?? ""} onChange={(e) => set("topic", e.target.value)} />
+                </div>
+              )}
+              {(local.props?.dataSource ?? "static") === "static" && (
+                <div className="grid gap-2">
+                  <label className="text-xs">静态数据 JSON(Array)</label>
+                  <Textarea rows={4} value={JSON.stringify(local.props?.data ?? [], null, 2)} onChange={(e) => {
+                    try {
+                      const v = JSON.parse(e.target.value || "[]");
+                      set("data", v);
+                    } catch {}
+                  }} />
+                </div>
+              )}
+              
+              <ColumnManager
+                 columns={local.props?.columns ?? []}
+                 onChange={(columns) => set("columns", columns)}
+               />
+              
+              <Separator />
+              
+              {/* 编辑功能配置 */}
+              <div className="space-y-3">
+                <div className="text-xs font-medium">编辑功能</div>
+                
+                <div className="grid gap-2">
+                  <label className="text-xs">编辑模式</label>
+                  <Select value={local.props?.editMode ?? "cell"} onValueChange={(v) => set("editMode", v)}>
+                    <SelectTrigger className="h-8">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cell">单元格编辑</SelectItem>
+                      <SelectItem value="row">行编辑</SelectItem>
+                      <SelectItem value="inline">内联编辑</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="grid gap-2">
+                  <label className="text-xs">触发方式</label>
+                  <Select value={local.props?.editTrigger ?? "click"} onValueChange={(v) => set("editTrigger", v)}>
+                    <SelectTrigger className="h-8">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="click">单击</SelectItem>
+                      <SelectItem value="dblclick">双击</SelectItem>
+                      <SelectItem value="focus">聚焦</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <Switch 
+                    id="allowAdd" 
+                    checked={local.props?.allowAdd !== false} 
+                    onCheckedChange={(checked) => set("allowAdd", checked)} 
+                  />
+                  <label htmlFor="allowAdd" className="text-xs">允许添加行</label>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <Switch 
+                    id="allowDelete" 
+                    checked={local.props?.allowDelete !== false} 
+                    onCheckedChange={(checked) => set("allowDelete", checked)} 
+                  />
+                  <label htmlFor="allowDelete" className="text-xs">允许删除行</label>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <Switch 
+                    id="showRowNumber" 
+                    checked={local.props?.showRowNumber === true} 
+                    onCheckedChange={(checked) => set("showRowNumber", checked)} 
+                  />
+                  <label htmlFor="showRowNumber" className="text-xs">显示行号</label>
+                </div>
+              </div>
+              
+              <Separator />
+              
+              {/* 表格外观配置 */}
+              <div className="space-y-3">
+                <div className="text-xs font-medium">表格外观</div>
+                
+                <div className="grid gap-2">
+                  <label className="text-xs">表格大小</label>
+                  <Select value={local.props?.size ?? "default"} onValueChange={(v) => set("size", v)}>
+                    <SelectTrigger className="h-8">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="sm">小</SelectItem>
+                      <SelectItem value="default">默认</SelectItem>
+                      <SelectItem value="lg">大</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="grid gap-2">
+                  <label className="text-xs">边框样式</label>
+                  <Select value={local.props?.bordered ?? "default"} onValueChange={(v) => set("bordered", v)}>
+                    <SelectTrigger className="h-8">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">无边框</SelectItem>
+                      <SelectItem value="default">默认边框</SelectItem>
+                      <SelectItem value="full">完整边框</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="grid gap-2">
+                  <label className="text-xs">表格高度</label>
+                  <Input 
+                    value={local.props?.height ?? ""} 
+                    onChange={(e) => set("height", e.target.value)}
+                    placeholder="auto, 400px, 50vh"
+                  />
+                </div>
+              </div>
+              
+              <Separator />
+              
+              {/* 验证配置 */}
+              <div className="space-y-3">
+                <div className="text-xs font-medium">数据验证</div>
+                
+                <div className="flex items-center gap-2">
+                  <Switch 
+                    id="enableValidation" 
+                    checked={local.props?.enableValidation === true} 
+                    onCheckedChange={(checked) => set("enableValidation", checked)} 
+                  />
+                  <label htmlFor="enableValidation" className="text-xs">启用数据验证</label>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <Switch 
+                    id="showValidationErrors" 
+                    checked={local.props?.showValidationErrors !== false} 
+                    onCheckedChange={(checked) => set("showValidationErrors", checked)} 
+                  />
+                  <label htmlFor="showValidationErrors" className="text-xs">显示验证错误</label>
+                </div>
+              </div>
+              
+              <Separator />
+              
+              {/* 事件配置 */}
+              <div className="space-y-3">
+                <div className="text-xs font-medium">事件配置</div>
+                
+                {/* 行添加事件 */}
+                <div className="space-y-2">
+                  <div className="text-xs text-muted-foreground">行添加事件 (onRowAdd)</div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        const events = local.props?.events || [];
+                        const newEvent = {
+                          id: generateUUID(),
+                          type: 'rowAdd',
+                          handler: '// 新行添加时触发\nconsole.log("新行数据:", event.row);'
+                        };
+                        set("events", [...events, newEvent]);
+                      }}
+                    >
+                      添加事件
+                    </Button>
+                  </div>
+                  {(local.props?.events || []).filter((e: any) => e.type === 'rowAdd').map((event: any, index: number) => (
+                    <div key={event.id} className="p-2 border rounded text-xs">
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-muted-foreground">行添加事件 #{index + 1}</span>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            const events = local.props?.events || [];
+                            set("events", events.filter((e: any) => e.id !== event.id));
+                          }}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                      <Textarea
+                        rows={3}
+                        value={event.handler || ''}
+                        onChange={(e) => {
+                          const events = local.props?.events || [];
+                          const updatedEvents = events.map((ev: any) => 
+                            ev.id === event.id ? { ...ev, handler: e.target.value } : ev
+                          );
+                          set("events", updatedEvents);
+                        }}
+                        placeholder="// 事件处理代码"
+                        className="font-mono text-xs"
+                      />
+                    </div>
+                  ))}
+                </div>
+                
+                {/* 行删除事件 */}
+                <div className="space-y-2">
+                  <div className="text-xs text-muted-foreground">行删除事件 (onRowDelete)</div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        const events = local.props?.events || [];
+                        const newEvent = {
+                          id: generateUUID(),
+                          type: 'rowDelete',
+                          handler: '// 行删除时触发\nconsole.log("删除的行数据:", event.row);'
+                        };
+                        set("events", [...events, newEvent]);
+                      }}
+                    >
+                      添加事件
+                    </Button>
+                  </div>
+                  {(local.props?.events || []).filter((e: any) => e.type === 'rowDelete').map((event: any, index: number) => (
+                    <div key={event.id} className="p-2 border rounded text-xs">
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-muted-foreground">行删除事件 #{index + 1}</span>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            const events = local.props?.events || [];
+                            set("events", events.filter((e: any) => e.id !== event.id));
+                          }}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                      <Textarea
+                        rows={3}
+                        value={event.handler || ''}
+                        onChange={(e) => {
+                          const events = local.props?.events || [];
+                          const updatedEvents = events.map((ev: any) => 
+                            ev.id === event.id ? { ...ev, handler: e.target.value } : ev
+                          );
+                          set("events", updatedEvents);
+                        }}
+                        placeholder="// 事件处理代码"
+                        className="font-mono text-xs"
+                      />
+                    </div>
+                  ))}
+                </div>
+                
+                {/* 单元格变化事件 */}
+                <div className="space-y-2">
+                  <div className="text-xs text-muted-foreground">单元格变化事件 (onCellChange)</div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        const events = local.props?.events || [];
+                        const newEvent = {
+                          id: generateUUID(),
+                          type: 'cellChange',
+                          handler: '// 单元格值变化时触发\nconsole.log("行索引:", event.rowIndex);\nconsole.log("列键:", event.columnKey);\nconsole.log("旧值:", event.oldValue);\nconsole.log("新值:", event.newValue);'
+                        };
+                        set("events", [...events, newEvent]);
+                      }}
+                    >
+                      添加事件
+                    </Button>
+                  </div>
+                  {(local.props?.events || []).filter((e: any) => e.type === 'cellChange').map((event: any, index: number) => (
+                    <div key={event.id} className="p-2 border rounded text-xs">
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-muted-foreground">单元格变化事件 #{index + 1}</span>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            const events = local.props?.events || [];
+                            set("events", events.filter((e: any) => e.id !== event.id));
+                          }}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                      <Textarea
+                        rows={4}
+                        value={event.handler || ''}
+                        onChange={(e) => {
+                          const events = local.props?.events || [];
+                          const updatedEvents = events.map((ev: any) => 
+                            ev.id === event.id ? { ...ev, handler: e.target.value } : ev
+                          );
+                          set("events", updatedEvents);
+                        }}
+                        placeholder="// 事件处理代码"
+                        className="font-mono text-xs"
+                      />
+                    </div>
+                  ))}
+                </div>
+                
+                {/* 数据变化事件 */}
+                <div className="space-y-2">
+                  <div className="text-xs text-muted-foreground">数据变化事件 (onChange)</div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        const events = local.props?.events || [];
+                        const newEvent = {
+                          id: generateUUID(),
+                          type: 'dataChange',
+                          handler: '// 表格数据变化时触发\nconsole.log("新的表格数据:", event.data);'
+                        };
+                        set("events", [...events, newEvent]);
+                      }}
+                    >
+                      添加事件
+                    </Button>
+                  </div>
+                  {(local.props?.events || []).filter((e: any) => e.type === 'dataChange').map((event: any, index: number) => (
+                    <div key={event.id} className="p-2 border rounded text-xs">
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-muted-foreground">数据变化事件 #{index + 1}</span>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            const events = local.props?.events || [];
+                            set("events", events.filter((e: any) => e.id !== event.id));
+                          }}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                      <Textarea
+                        rows={3}
+                        value={event.handler || ''}
+                        onChange={(e) => {
+                          const events = local.props?.events || [];
+                          const updatedEvents = events.map((ev: any) => 
+                            ev.id === event.id ? { ...ev, handler: e.target.value } : ev
+                          );
+                          set("events", updatedEvents);
+                        }}
+                        placeholder="// 事件处理代码"
+                        className="font-mono text-xs"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
             </AccordionContent>
           </AccordionItem>
         )}
@@ -3250,6 +4424,134 @@ function Inspector({
                       placeholder="请输入默认值"
                     />
                   </div>
+                  
+                  <Separator />
+                  
+                  <div className="grid gap-2">
+                    <div className="flex items-center gap-2">
+                      <Switch 
+                        id="prefix-button" 
+                        checked={local.props?.prefixButton?.enabled === true} 
+                        onCheckedChange={(checked) => set("prefixButton", { ...local.props?.prefixButton, enabled: checked })} 
+                      />
+                      <label htmlFor="prefix-button" className="text-xs">前缀按钮</label>
+                    </div>
+                    {local.props?.prefixButton?.enabled && (
+                      <div className="ml-4 space-y-2">
+                        <div className="grid gap-2">
+                          <label className="text-xs">按钮文字</label>
+                          <Input 
+                            value={local.props?.prefixButton?.text ?? ""} 
+                            onChange={(e) => set("prefixButton", { ...local.props?.prefixButton, text: e.target.value })} 
+                            placeholder="按钮文字"
+                          />
+                        </div>
+                        <div className="grid gap-2">
+                          <label className="text-xs">按钮图标</label>
+                          <Select 
+                            value={local.props?.prefixButton?.icon ?? ""} 
+                            onValueChange={(value) => set("prefixButton", { ...local.props?.prefixButton, icon: value })}
+                          >
+                            <SelectTrigger className="h-8">
+                              <SelectValue placeholder="选择图标" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="">无图标</SelectItem>
+                              <SelectItem value="search">搜索</SelectItem>
+                              <SelectItem value="plus">加号</SelectItem>
+                              <SelectItem value="edit">编辑</SelectItem>
+                              <SelectItem value="save">保存</SelectItem>
+                              <SelectItem value="settings">设置</SelectItem>
+                              <SelectItem value="user">用户</SelectItem>
+                              <SelectItem value="home">首页</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="grid gap-2">
+                          <label className="text-xs">按钮样式</label>
+                          <Select 
+                            value={local.props?.prefixButton?.variant ?? "outline"} 
+                            onValueChange={(value) => set("prefixButton", { ...local.props?.prefixButton, variant: value })}
+                          >
+                            <SelectTrigger className="h-8">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="default">默认</SelectItem>
+                              <SelectItem value="destructive">危险</SelectItem>
+                              <SelectItem value="outline">轮廓</SelectItem>
+                              <SelectItem value="secondary">次要</SelectItem>
+                              <SelectItem value="ghost">幽灵</SelectItem>
+                              <SelectItem value="link">链接</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="grid gap-2">
+                    <div className="flex items-center gap-2">
+                      <Switch 
+                        id="suffix-button" 
+                        checked={local.props?.suffixButton?.enabled === true} 
+                        onCheckedChange={(checked) => set("suffixButton", { ...local.props?.suffixButton, enabled: checked })} 
+                      />
+                      <label htmlFor="suffix-button" className="text-xs">后缀按钮</label>
+                    </div>
+                    {local.props?.suffixButton?.enabled && (
+                      <div className="ml-4 space-y-2">
+                        <div className="grid gap-2">
+                          <label className="text-xs">按钮文字</label>
+                          <Input 
+                            value={local.props?.suffixButton?.text ?? ""} 
+                            onChange={(e) => set("suffixButton", { ...local.props?.suffixButton, text: e.target.value })} 
+                            placeholder="按钮文字"
+                          />
+                        </div>
+                        <div className="grid gap-2">
+                          <label className="text-xs">按钮图标</label>
+                          <Select 
+                            value={local.props?.suffixButton?.icon ?? ""} 
+                            onValueChange={(value) => set("suffixButton", { ...local.props?.suffixButton, icon: value })}
+                          >
+                            <SelectTrigger className="h-8">
+                              <SelectValue placeholder="选择图标" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="">无图标</SelectItem>
+                              <SelectItem value="search">搜索</SelectItem>
+                              <SelectItem value="plus">加号</SelectItem>
+                              <SelectItem value="edit">编辑</SelectItem>
+                              <SelectItem value="save">保存</SelectItem>
+                              <SelectItem value="settings">设置</SelectItem>
+                              <SelectItem value="user">用户</SelectItem>
+                              <SelectItem value="home">首页</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="grid gap-2">
+                          <label className="text-xs">按钮样式</label>
+                          <Select 
+                            value={local.props?.suffixButton?.variant ?? "outline"} 
+                            onValueChange={(value) => set("suffixButton", { ...local.props?.suffixButton, variant: value })}
+                          >
+                            <SelectTrigger className="h-8">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="default">默认</SelectItem>
+                              <SelectItem value="destructive">危险</SelectItem>
+                              <SelectItem value="outline">轮廓</SelectItem>
+                              <SelectItem value="secondary">次要</SelectItem>
+                              <SelectItem value="ghost">幽灵</SelectItem>
+                              <SelectItem value="link">链接</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </>
               )}
               
@@ -3372,6 +4674,280 @@ function Inspector({
                   </div>
                 </>
               )}
+
+              {local.type === "NumberInput" && (
+                <>
+                  <div className="grid gap-2">
+                    <label className="text-xs">占位符</label>
+                    <Input 
+                      value={local.props?.placeholder ?? ""} 
+                      onChange={(e) => set("placeholder", e.target.value)} 
+                      placeholder="请输入数字"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-xs">默认值</label>
+                    <Input 
+                      type="number"
+                      value={local.props?.value ?? ""} 
+                      onChange={(e) => set("value", e.target.value)} 
+                      placeholder="0"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-xs">最小值</label>
+                    <Input 
+                      type="number"
+                      value={local.props?.min ?? ""} 
+                      onChange={(e) => set("min", e.target.value)} 
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-xs">最大值</label>
+                    <Input 
+                      type="number"
+                      value={local.props?.max ?? ""} 
+                      onChange={(e) => set("max", e.target.value)} 
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-xs">步长</label>
+                    <Input 
+                      type="number"
+                      value={local.props?.step ?? 1} 
+                      onChange={(e) => set("step", Number(e.target.value))} 
+                    />
+                  </div>
+                </>
+              )}
+
+              {local.type === "RichTextEditor" && (
+                <>
+                  <div className="grid gap-2">
+                    <label className="text-xs">占位符</label>
+                    <Input 
+                      value={local.props?.placeholder ?? ""} 
+                      onChange={(e) => set("placeholder", e.target.value)} 
+                      placeholder="请输入内容"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-xs">默认内容</label>
+                    <Textarea 
+                      value={local.props?.content ?? ""} 
+                      onChange={(e) => set("content", e.target.value)} 
+                      placeholder="默认内容"
+                      rows={3}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-xs">行数</label>
+                    <Input 
+                      type="number"
+                      value={local.props?.rows ?? 6} 
+                      onChange={(e) => set("rows", Number(e.target.value))} 
+                    />
+                  </div>
+                </>
+              )}
+
+              {local.type === "DatePicker" && (
+                <>
+                  <div className="grid gap-2">
+                    <label className="text-xs">日期类型</label>
+                    <Select value={local.props?.type ?? "date"} onValueChange={(v) => set("type", v)}>
+                      <SelectTrigger className="h-8">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="date">日期</SelectItem>
+                        <SelectItem value="datetime-local">日期时间</SelectItem>
+                        <SelectItem value="time">时间</SelectItem>
+                        <SelectItem value="month">月份</SelectItem>
+                        <SelectItem value="week">周</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-xs">默认值</label>
+                    <Input 
+                      value={local.props?.value ?? ""} 
+                      onChange={(e) => set("value", e.target.value)} 
+                      placeholder="2024-01-01"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-xs">最小日期</label>
+                    <Input 
+                      value={local.props?.min ?? ""} 
+                      onChange={(e) => set("min", e.target.value)} 
+                      placeholder="2020-01-01"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-xs">最大日期</label>
+                    <Input 
+                      value={local.props?.max ?? ""} 
+                      onChange={(e) => set("max", e.target.value)} 
+                      placeholder="2030-12-31"
+                    />
+                  </div>
+                </>
+              )}
+
+              {local.type === "MultiSelect" && (
+                <>
+                  <div className="grid gap-2">
+                    <label className="text-xs">标签</label>
+                    <Input 
+                      value={local.props?.label ?? ""} 
+                      onChange={(e) => set("label", e.target.value)} 
+                      placeholder="多选"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-xs">选项配置 (JSON)</label>
+                    <Textarea 
+                      value={JSON.stringify(local.props?.options ?? [], null, 2)} 
+                      onChange={(e) => {
+                        try {
+                          const options = JSON.parse(e.target.value);
+                          set("options", options);
+                        } catch (err) {
+                          // 忽略JSON解析错误
+                        }
+                      }} 
+                      placeholder='[{"value": "option1", "label": "选项1"}]'
+                      rows={4}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-xs">默认选中值 (JSON)</label>
+                    <Textarea 
+                      value={JSON.stringify(local.props?.value ?? [], null, 2)} 
+                      onChange={(e) => {
+                        try {
+                          const value = JSON.parse(e.target.value);
+                          set("value", value);
+                        } catch (err) {
+                          // 忽略JSON解析错误
+                        }
+                      }} 
+                      placeholder='["option1", "option2"]'
+                      rows={2}
+                    />
+                  </div>
+                </>
+              )}
+
+              {local.type === "Lookup" && (
+                <>
+                  <div className="grid gap-2">
+                    <label className="text-xs">占位符</label>
+                    <Input 
+                      value={local.props?.placeholder ?? ""} 
+                      onChange={(e) => set("placeholder", e.target.value)} 
+                      placeholder="请选择"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-xs">选项配置 (JSON)</label>
+                    <Textarea 
+                      value={JSON.stringify(local.props?.options ?? [], null, 2)} 
+                      onChange={(e) => {
+                        try {
+                          const options = JSON.parse(e.target.value);
+                          set("options", options);
+                        } catch (err) {
+                          // 忽略JSON解析错误
+                        }
+                      }} 
+                      placeholder='[{"value": "option1", "label": "选项1"}]'
+                      rows={4}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-xs">默认值</label>
+                    <Input 
+                      value={local.props?.value ?? ""} 
+                      onChange={(e) => set("value", e.target.value)} 
+                      placeholder="option1"
+                    />
+                  </div>
+                </>
+              )}
+
+              {local.type === "Link" && (
+                <>
+                  <div className="grid gap-2">
+                    <label className="text-xs">链接文本</label>
+                    <Input 
+                      value={local.props?.text ?? ""} 
+                      onChange={(e) => set("text", e.target.value)} 
+                      placeholder="链接"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-xs">链接地址</label>
+                    <Input 
+                      value={local.props?.href ?? ""} 
+                      onChange={(e) => set("href", e.target.value)} 
+                      placeholder="https://example.com"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-xs">打开方式</label>
+                    <Select value={local.props?.target ?? "_self"} onValueChange={(v) => set("target", v)}>
+                      <SelectTrigger className="h-8">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="_self">当前窗口</SelectItem>
+                        <SelectItem value="_blank">新窗口</SelectItem>
+                        <SelectItem value="_parent">父窗口</SelectItem>
+                        <SelectItem value="_top">顶层窗口</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </>
+              )}
+
+              {local.type === "Image" && (
+                <>
+                  <div className="grid gap-2">
+                    <label className="text-xs">图片地址</label>
+                    <Input 
+                      value={local.props?.src ?? ""} 
+                      onChange={(e) => set("src", e.target.value)} 
+                      placeholder="https://example.com/image.jpg"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-xs">替代文本</label>
+                    <Input 
+                      value={local.props?.alt ?? ""} 
+                      onChange={(e) => set("alt", e.target.value)} 
+                      placeholder="图片描述"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-xs">宽度</label>
+                    <Input 
+                      value={local.props?.width ?? ""} 
+                      onChange={(e) => set("width", e.target.value)} 
+                      placeholder="300"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-xs">高度</label>
+                    <Input 
+                      value={local.props?.height ?? ""} 
+                      onChange={(e) => set("height", e.target.value)} 
+                      placeholder="200"
+                    />
+                  </div>
+                </>
+              )}
             </AccordionContent>
           </AccordionItem>
         )}
@@ -3449,6 +5025,140 @@ function Inspector({
                 <Switch 
                   checked={local.props?.showLine ?? true} 
                   onCheckedChange={(checked) => set("showLine", checked)} 
+                />
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        )}
+
+        {local.type === "PageTab" && (
+          <AccordionItem value="pagetab-config">
+            <AccordionTrigger className="text-sm font-medium">
+              页面标签配置
+            </AccordionTrigger>
+            <AccordionContent className="space-y-3">
+              <div className="grid gap-2">
+                <label className="text-xs">标签页配置</label>
+                <div className="space-y-2">
+                  {(local.props?.tabs || []).map((tab: any, index: number) => (
+                    <div key={index} className="border rounded p-2 space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-medium">标签页 {index + 1}</span>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            const newTabs = [...(local.props?.tabs || [])];
+                            newTabs.splice(index, 1);
+                            set("tabs", newTabs);
+                          }}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                      <div className="grid gap-2">
+                        <Input
+                          placeholder="标签名称"
+                          value={tab.label || ""}
+                          onChange={(e) => {
+                            const newTabs = [...(local.props?.tabs || [])];
+                            newTabs[index] = { ...tab, label: e.target.value };
+                            set("tabs", newTabs);
+                          }}
+                        />
+                        <Input
+                          placeholder="页面ID"
+                          value={tab.pageId || ""}
+                          onChange={(e) => {
+                            const newTabs = [...(local.props?.tabs || [])];
+                            newTabs[index] = { ...tab, pageId: e.target.value };
+                            set("tabs", newTabs);
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      const newTabs = [...(local.props?.tabs || [])];
+                      newTabs.push({
+                        value: `tab${newTabs.length + 1}`,
+                        label: `页面${newTabs.length + 1}`,
+                        pageId: ""
+                      });
+                      set("tabs", newTabs);
+                    }}
+                  >
+                    添加标签页
+                  </Button>
+                </div>
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        )}
+
+        {local.type === "NestedPageContainer" && (
+          <AccordionItem value="nestedpage-config">
+            <AccordionTrigger className="text-sm font-medium">
+              嵌套页面容器配置
+            </AccordionTrigger>
+            <AccordionContent className="space-y-3">
+              <div className="grid gap-2">
+                <label className="text-xs">绑定页面ID</label>
+                <Input
+                  value={local.props?.pageId || ""}
+                  onChange={(e) => set("pageId", e.target.value)}
+                  placeholder="输入要绑定的页面ID"
+                />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-xs">最小高度</label>
+                <Input
+                  value={local.props?.minHeight || ""}
+                  onChange={(e) => set("minHeight", e.target.value)}
+                  placeholder="200px"
+                />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-xs">内边距</label>
+                <Input
+                  value={local.props?.padding || ""}
+                  onChange={(e) => set("padding", e.target.value)}
+                  placeholder="16px"
+                />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-xs">外边距</label>
+                <Input
+                  value={local.props?.margin || ""}
+                  onChange={(e) => set("margin", e.target.value)}
+                  placeholder="0"
+                />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-xs">背景颜色</label>
+                <Input
+                  value={local.props?.backgroundColor || ""}
+                  onChange={(e) => set("backgroundColor", e.target.value)}
+                  placeholder="transparent"
+                />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-xs">边框</label>
+                <Input
+                  value={local.props?.border || ""}
+                  onChange={(e) => set("border", e.target.value)}
+                  placeholder="1px solid #e5e7eb"
+                />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-xs">圆角</label>
+                <Input
+                  value={local.props?.borderRadius || ""}
+                  onChange={(e) => set("borderRadius", e.target.value)}
+                  placeholder="8px"
                 />
               </div>
             </AccordionContent>
@@ -3584,6 +5294,17 @@ export default function Studio() {
       console.log('状态更新完成');
     } catch (error) {
       console.error('删除组件时出错:', error);
+    }
+  };
+
+  // 为当前页面添加默认间距配置
+  const addDefaultSpacingToCurrentPage = () => {
+    try {
+      const migratedPage = migratePageSpacing(page);
+      commit(migratedPage);
+      console.log('已为当前页面添加默认间距配置');
+    } catch (error) {
+      console.error('添加默认间距配置时出错:', error);
     }
   };
 
@@ -3867,12 +5588,21 @@ export default function Studio() {
     { key: "Button", label: "按钮" },
     { key: "Badge", label: "徽章" },
     { key: "Input", label: "输入框" },
+    { key: "NumberInput", label: "数字输入框" },
     { key: "Textarea", label: "多行输入" },
+    { key: "RichTextEditor", label: "富文本编辑器" },
+    { key: "DatePicker", label: "日期选择器" },
     { key: "Switch", label: "开关" },
     { key: "Slider", label: "滑块" },
+    { key: "Select", label: "下拉选择" },
+    { key: "MultiSelect", label: "多选" },
+    { key: "Lookup", label: "查找" },
     { key: "Separator", label: "分割线" },
     { key: "Avatar", label: "头像" },
     { key: "Progress", label: "进度条" },
+    { key: "Link", label: "链接" },
+    { key: "Image", label: "图片" },
+    { key: "Upload", label: "文件上传" },
     { key: "Skeleton", label: "骨架屏" },
     { key: "Tooltip", label: "气泡提示" },
     { key: "Popover", label: "弹出层" },
@@ -3880,7 +5610,10 @@ export default function Studio() {
     { key: "Alert", label: "警告提示" },
     { key: "Card", label: "卡片" },
     { key: "Table", label: "表格" },
+    { key: "EditableTable", label: "可编辑表格" },
     { key: "Listener", label: "事件监听器" },
+    { key: "PageTab", label: "页面标签" },
+    { key: "NestedPageContainer", label: "嵌套页面容器" },
   ];
 
   // 组件图标映射 (FontAwesome风格)
@@ -3897,11 +5630,19 @@ export default function Studio() {
     // 表单组件
     Button: "fas fa-hand-pointer",
     Input: "fas fa-edit",
+    NumberInput: "fas fa-calculator",
     Textarea: "fas fa-align-left",
+    RichTextEditor: "fas fa-font",
+    DatePicker: "fas fa-calendar",
     Switch: "fas fa-toggle-on",
     Slider: "fas fa-sliders-h",
     Select: "fas fa-list",
+    MultiSelect: "fas fa-list-ul",
+    Lookup: "fas fa-search",
     Command: "fas fa-terminal",
+    Link: "fas fa-link",
+    Image: "fas fa-image",
+    Upload: "fas fa-upload",
     
     // 展示组件
     Badge: "fas fa-tag",
@@ -3909,6 +5650,7 @@ export default function Studio() {
     Progress: "fas fa-chart-line",
     Skeleton: "fas fa-spinner",
     Table: "fas fa-table",
+    EditableTable: "fas fa-edit",
     Alert: "fas fa-exclamation-triangle",
     
     // 交互组件
@@ -3956,6 +5698,7 @@ export default function Studio() {
       { key: "Container", label: "容器" },
       { key: "Grid", label: "栅格容器" },
       { key: "GridItem", label: "栅格项" },
+      { key: "NestedPageContainer", label: "嵌套页面容器" },
       { key: "Separator", label: "分割线" },
       { key: "Card", label: "基础卡片" },
       { key: "CollapsibleCard", label: "可收缩卡片" },
@@ -3967,18 +5710,26 @@ export default function Studio() {
       { key: "Label", label: "标签" },
       { key: "Button", label: "按钮" },
       { key: "Input", label: "输入框" },
+      { key: "NumberInput", label: "数字输入框" },
       { key: "Textarea", label: "多行输入" },
+      { key: "RichTextEditor", label: "富文本编辑器" },
+      { key: "DatePicker", label: "日期选择器" },
       { key: "Switch", label: "开关" },
       { key: "Slider", label: "滑块" },
       { key: "Select", label: "选择器" },
+      { key: "MultiSelect", label: "多选" },
+      { key: "Lookup", label: "查找" },
       { key: "Command", label: "命令面板" },
     ],
     "展示组件": [
       { key: "Badge", label: "徽章" },
       { key: "Avatar", label: "头像" },
       { key: "Progress", label: "进度条" },
+      { key: "Link", label: "链接" },
+      { key: "Image", label: "图片" },
       { key: "Skeleton", label: "骨架屏" },
       { key: "Table", label: "表格" },
+      { key: "EditableTable", label: "可编辑表格" },
       { key: "Alert", label: "警告提示" },
     ],
     "交互组件": [
@@ -3991,6 +5742,7 @@ export default function Studio() {
     ],
     "导航组件": [
       { key: "Tabs", label: "标签页" },
+      { key: "PageTab", label: "页面标签页" },
       { key: "Accordion", label: "手风琴" },
       { key: "Collapsible", label: "折叠面板" },
     ],
@@ -4354,9 +6106,34 @@ export default function Studio() {
               moveTo={(cid) => moveAsChild(selectedId!, cid)}
               autoClassHint={useMemo(() => {
                 if (!selectedId) return null;
+                const hints = [];
+                
+                // 定义findNode函数
+                const findNode = (n: NodeMeta, id: string): NodeMeta | null => {
+                  if (n.id === id) return n;
+                  for (const c of n.children ?? []) {
+                    const r = findNode(c, id);
+                    if (r) return r;
+                  }
+                  return null;
+                };
+                
+                // 布局相关的提示
                 const p = findParent(page.root, selectedId).parent;
-                if (p && p.layout === "row") return "flex-1 min-w-[200px]";
-                return null;
+                if (p && p.layout === "row") {
+                  hints.push("flex-1 min-w-[200px]");
+                }
+                
+                // 间距样式提示
+                const selectedNode = findNode(page.root, selectedId);
+                if (selectedNode) {
+                  const spacingClasses = getSpacingClasses(selectedNode.margin, selectedNode.padding);
+                  if (spacingClasses) {
+                    hints.push(spacingClasses);
+                  }
+                }
+                
+                return hints.length > 0 ? hints.join(" ") : null;
               }, [page, selectedId])}
               onSaveComponent={openSaveComponentDialog}
               page={page}
@@ -4379,6 +6156,9 @@ export default function Studio() {
               <div className="text-xs text-muted-foreground">模板：{page.template}</div>
               <Button variant="secondary" onClick={() => navigator.clipboard.writeText(JSON.stringify(page))}>
                 复制页面元数据
+              </Button>
+              <Button variant="outline" onClick={addDefaultSpacingToCurrentPage}>
+                添加默认间距
               </Button>
             </div>
           </TabsContent>

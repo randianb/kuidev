@@ -24,6 +24,7 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/h
 import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle, DrawerTrigger } from "@/components/ui/drawer";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { EditableTable } from "@/components/ui/editable-table";
 import { Transfer } from "./components/ui/transfer";
 import { Upload } from "./components/ui/upload";
 import { Iframe } from "./components/ui/iframe";
@@ -43,7 +44,103 @@ import { cn } from "@/lib/utils";
 import { bus } from "@/lib/eventBus";
 import { execHandler } from "@/lib/handlers";
 import { formValidationManager } from "./form-validation";
-import type { NodeMeta } from "./types";
+import { getPage } from "./storage";
+import type { NodeMeta, PageMeta } from "./types";
+import { getSpacingClasses, getDefaultSpacing, mergeSpacingConfig } from "./utils/spacing";
+
+// 页面内容渲染组件
+// 递归渲染页面内容的组件
+function PageNodeRenderer({ node, ctx }: { node: NodeMeta; ctx: any }): JSX.Element {
+  const renderer = registry[node.type];
+  if (!renderer) {
+    return <div className="text-red-500">未知组件类型: {node.type}</div>;
+  }
+
+  // 这些组件类型会自己渲染子节点，不需要我们递归渲染
+  const componentsWithOwnChildRendering = [
+    'Container', 'Card', 'Grid', 'GridItem', 'CollapsibleCard', 
+    'ActionCard', 'InfoCard', 'StatsCard', 'Accordion', 'Collapsible',
+    'Tabs', 'PageTab', 'NestedPageContainer'
+  ];
+
+  const shouldRenderChildren = !componentsWithOwnChildRendering.includes(node.type);
+
+  return (
+    <div key={node.id}>
+      {renderer(node, {
+        ...ctx,
+        design: false, // 嵌套页面不显示设计模式
+        onSelect: undefined, // 禁用选择功能
+      })}
+      {shouldRenderChildren && node.children?.map(child => (
+        <PageNodeRenderer key={child.id} node={child} ctx={ctx} />
+      ))}
+    </div>
+  );
+}
+
+function PageContentRenderer({ pageId, ctx }: { pageId: string; ctx: any }) {
+  const [pageData, setPageData] = useState<PageMeta | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadPageData = () => {
+      try {
+        const page = getPage(pageId);
+        setPageData(page);
+      } catch (error) {
+        console.error('Failed to load page:', error);
+        setPageData(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadPageData();
+  }, [pageId]);
+
+  if (loading) {
+    return (
+      <div className="nested-page-content w-full h-full">
+        <div className="flex items-center justify-center p-4">
+          <div className="text-sm text-gray-500">加载页面中...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!pageData) {
+    return (
+      <div className="nested-page-content w-full h-full">
+        <div className="flex items-center justify-center p-4 border-2 border-dashed border-red-300 rounded bg-red-50">
+          <div className="text-center text-red-600">
+            <div className="text-sm font-medium">页面未找到</div>
+            <div className="text-xs mt-1">页面ID: {pageId}</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!pageData.root) {
+    return (
+      <div className="nested-page-content w-full h-full">
+        <div className="flex items-center justify-center p-4 text-gray-500">
+          <div className="text-center">
+            <div className="text-sm">页面内容为空</div>
+            <div className="text-xs mt-1">页面: {pageData.name}</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="nested-page-content w-full h-full">
+      <PageNodeRenderer node={pageData.root} ctx={ctx} />
+    </div>
+  );
+}
 
 // 检查节点是否在锁定容器内
 function isNodeInLockedContainer(nodeId: string, rootNode: NodeMeta, targetNodeId?: string): boolean {
@@ -618,9 +715,11 @@ export const registry: Record<string, Renderer> = {
             "flex items-center justify-center",
             ctx.design ? "min-h-[240px]" : "h-full"
           )}>
-            <div className="pointer-events-none select-none text-center text-xs text-muted-foreground w-full py-10">
-              空容器，拖拽组件到此
-            </div>
+            {ctx.design && (
+              <div className="pointer-events-none select-none text-center text-xs text-muted-foreground w-full py-10">
+                空容器，拖拽组件到此
+              </div>
+            )}
           </div>
         )
       ) : node.layout === "grid" ? (
@@ -641,7 +740,7 @@ export const registry: Record<string, Renderer> = {
               <NodeRenderer node={child} ctx={ctx} />
             </div>
           ))}
-          {!node.children?.length && (
+          {!node.children?.length && ctx.design && (
             <div className="pointer-events-none select-none text-center text-xs text-muted-foreground w-full py-10 col-span-full">
               空容器，拖拽组件到此
             </div>
@@ -654,12 +753,11 @@ export const registry: Record<string, Renderer> = {
             ? (node.flexEnabled ? "flex flex-col gap-3" : node.alignItems === "end" ? "flex flex-col gap-3 justify-end" : "space-y-3")
             : "flex gap-3 flex-row",
           // 添加alignItems支持 - 对于flex布局
-          node.alignItems && (node.flexEnabled ) && {
-            "items-start": node.alignItems === "start",
-            "items-center": node.alignItems === "center", 
-            "items-end": node.alignItems === "end",
-            "items-stretch": node.alignItems === "stretch"
-          },
+          node.alignItems && node.flexEnabled && 
+            node.alignItems === "start" ? "items-start" :
+            node.alignItems === "center" ? "items-center" :
+            node.alignItems === "end" ? "items-end" :
+            node.alignItems === "stretch" ? "items-stretch" : "",
           ctx.design ? "min-h-[240px]" : "h-full"
         )}>
           {(node.children ?? []).map((child) => (
@@ -672,7 +770,7 @@ export const registry: Record<string, Renderer> = {
               <NodeRenderer node={child} ctx={ctx} />
             </div>
           ))}
-          {!node.children?.length && (
+          {!node.children?.length && ctx.design && (
             <div className="pointer-events-none select-none text-center text-xs text-muted-foreground w-full py-10">
               空容器，拖拽组件到此
             </div>
@@ -840,6 +938,60 @@ export const registry: Record<string, Renderer> = {
       formValidationManager.registerField(node.id, 'value', node.props?.required || false, node.code);
       formValidationManager.updateFieldValue(node.id, 'value', value);
     }, [value, node.id, node.props?.required, node.code]);
+
+    const handlePrefixButtonClick = () => {
+      if (node.props?.events) {
+        (node.props.events as any[]).forEach((event) => {
+          if (event.type === "onPrefixButtonClick") {
+            execHandler(event.handler, { value, ...event.params });
+          }
+        });
+      }
+    };
+
+    const handleSuffixButtonClick = () => {
+      if (node.props?.events) {
+        (node.props.events as any[]).forEach((event) => {
+          if (event.type === "onSuffixButtonClick") {
+            execHandler(event.handler, { value, ...event.params });
+          }
+        });
+      }
+    };
+
+    const prefixButton = node.props?.prefixButton;
+    const suffixButton = node.props?.suffixButton;
+
+    const iconMap: Record<string, any> = {
+      search: Search,
+      plus: Plus,
+      edit: Edit,
+      save: Save,
+      settings: Settings,
+      user: User,
+      home: Home,
+    };
+
+    const renderButton = (buttonConfig: any, onClick: () => void) => {
+      if (!buttonConfig?.enabled) return null;
+      
+      const IconComponent = buttonConfig.icon ? iconMap[buttonConfig.icon] : null;
+      
+      return (
+        <Button
+          type="button"
+          variant={buttonConfig.variant || "outline"}
+          size="sm"
+          onClick={onClick}
+          className="h-9 px-3 shrink-0"
+        >
+          {IconComponent && <IconComponent className="h-4 w-4" />}
+          {buttonConfig.text && (
+            <span className={IconComponent ? "ml-1" : ""}>{buttonConfig.text}</span>
+          )}
+        </Button>
+      );
+    };
     
     return (
       <FormLabel 
@@ -849,26 +1001,30 @@ export const registry: Record<string, Renderer> = {
         nodeId={node.id}
         fieldName="value"
       >
-        <Input 
-          placeholder={node.props?.placeholder ?? "请输入..."} 
-          className={node.props?.className}
-          value={value}
-          onChange={(e) => {
-            setValue(e.target.value);
-            if (node.props?.events) {
-              (node.props.events as any[]).forEach((event) => {
-                if (event.type === "onChange") {
-                  execHandler(event.handler, { value: e.target.value, ...event.params });
-                }
-              });
-            }
-          }}
-          onBlur={() => {
-            if (node.props?.required) {
-              formValidationManager.markFieldBlurred(node.id, 'value');
-            }
-          }}
-        />
+        <div className="flex items-center gap-2">
+          {renderButton(prefixButton, handlePrefixButtonClick)}
+          <Input 
+            placeholder={node.props?.placeholder ?? "请输入..."} 
+            className={cn("flex-1", node.props?.className)}
+            value={value}
+            onChange={(e) => {
+              setValue(e.target.value);
+              if (node.props?.events) {
+                (node.props.events as any[]).forEach((event) => {
+                  if (event.type === "onChange") {
+                    execHandler(event.handler, { value: e.target.value, ...event.params });
+                  }
+                });
+              }
+            }}
+            onBlur={() => {
+              if (node.props?.required) {
+                formValidationManager.markFieldBlurred(node.id, 'value');
+              }
+            }}
+          />
+          {renderButton(suffixButton, handleSuffixButtonClick)}
+        </div>
       </FormLabel>
     );
   },
@@ -994,7 +1150,6 @@ export const registry: Record<string, Renderer> = {
     
     useEffect(() => {
       if (node.props?.required) {
-        const { formValidationManager } = require('./utils/form-validation');
         formValidationManager.updateFieldValue(node.id, 'value', value[0]);
       }
     }, [value, node.id, node.props?.required]);
@@ -1125,6 +1280,150 @@ export const registry: Record<string, Renderer> = {
         </Tabs>
       );
      },
+     PageTab: (node, ctx) => {
+       const tabs = node.props?.tabs || [
+         { value: "tab1", label: "页面1", pageId: null, isNestedPage: false },
+         { value: "tab2", label: "页面2", pageId: null, isNestedPage: false },
+       ];
+       
+       const [activeTab, setActiveTab] = useState(tabs[0]?.value || "tab1");
+       
+       const handleTabChange = (value: string) => {
+         setActiveTab(value);
+         const tab = tabs.find((t: any) => t.value === value);
+         if (tab?.pageId) {
+           // 触发页面切换事件
+           execHandler(node.props?.onTabChange, { 
+             value, 
+             pageId: tab.pageId, 
+             node, 
+             ctx 
+           });
+         }
+       };
+
+       const handleConvertToNestedPage = (tabValue: string) => {
+         const tab = tabs.find((t: any) => t.value === tabValue);
+         if (tab) {
+           tab.isNestedPage = true;
+           // 触发转换事件
+           execHandler(node.props?.onConvertToNestedPage, { 
+             tabValue, 
+             tab, 
+             node, 
+             ctx 
+           });
+         }
+       };
+
+       return (
+         <Tabs value={activeTab} onValueChange={handleTabChange} className={cn("h-full flex flex-col", node.props?.className)}>
+           <TabsList>
+             {tabs.map((tab: any) => (
+               <TabsTrigger key={tab.value} value={tab.value}>
+                 {tab.label}
+               </TabsTrigger>
+             ))}
+           </TabsList>
+           {tabs.map((tab: any) => (
+             <TabsContent key={tab.value} value={tab.value} className="flex-1 min-h-0 overflow-auto mt-4">
+               {tab.pageId ? (
+                 <div className="h-full flex flex-col">
+                   {ctx.design && (
+                     <div className="text-xs text-gray-600 px-3 py-2 bg-blue-50 border-b">
+                       绑定页面: {tab.pageId}
+                     </div>
+                   )}
+                   <div className="flex-1 min-h-0 overflow-auto">
+                     <PageContentRenderer pageId={tab.pageId} ctx={ctx} />
+                   </div>
+                 </div>
+               ) : tab.isNestedPage ? (
+                 <div className="h-full flex flex-col">
+                   {ctx.design && (
+                     <div className="text-xs text-gray-500 px-3 py-2 bg-green-50 border-b">
+                       嵌套页面容器
+                     </div>
+                   )}
+                   <div className="flex-1 min-h-0 overflow-auto p-6">
+                     {/* 空容器，可以拖拽组件进来 */}
+                     <div className="h-full border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center">
+                       <div className="text-center text-gray-500">
+                         <div className="text-sm">嵌套页面容器</div>
+                         <div className="text-xs mt-1">拖拽组件到这里构建页面</div>
+                       </div>
+                     </div>
+                   </div>
+                 </div>
+               ) : (
+                 <div className="h-full flex items-center justify-center">
+                   <div className="text-center text-gray-500 space-y-4">
+                     <div>
+                       <div className="text-sm">空页签</div>
+                       <div className="text-xs mt-1">请选择页面绑定或转换为嵌套页面</div>
+                     </div>
+                     {ctx.design && (
+                       <div className="space-y-2">
+                         <Button 
+                           variant="outline" 
+                           size="sm"
+                           onClick={() => handleConvertToNestedPage(tab.value)}
+                         >
+                           转换为嵌套页面
+                         </Button>
+                       </div>
+                     )}
+                   </div>
+                 </div>
+               )}
+             </TabsContent>
+           ))}
+         </Tabs>
+       );
+     },
+     NestedPageContainer: (node, ctx) => {
+       const pageId = node.props?.pageId;
+       const containerStyle = {
+         padding: node.props?.padding || "0",
+         margin: node.props?.margin || "0",
+         backgroundColor: node.props?.backgroundColor || "transparent",
+         border: node.props?.border || "1px solid #e5e7eb",
+         borderRadius: node.props?.borderRadius || "8px",
+         minHeight: node.props?.minHeight || "200px",
+         ...node.props?.style
+       };
+
+       return (
+         <div 
+           className={cn("nested-page-container", node.props?.className)}
+           style={containerStyle}
+           onClick={(e) => {
+             e.stopPropagation();
+             ctx.onSelect?.(node.id);
+           }}
+         >
+           {pageId ? (
+             <div className="h-full">
+               {ctx.design && (
+                 <div className="text-xs text-gray-500 mb-2 px-2 py-1 bg-blue-50 rounded">
+                   嵌套页面: {pageId}
+                 </div>
+               )}
+               <div className={cn("h-full min-h-[150px] overflow-hidden", ctx.design ? "border rounded" : "")}>
+                 <PageContentRenderer pageId={pageId} ctx={ctx} />
+               </div>
+             </div>
+           ) : (
+             <div className="h-full flex items-center justify-center border-2 border-dashed border-gray-300 rounded">
+               <div className="text-center text-gray-500">
+                 <div className="text-sm">嵌套页面容器</div>
+                 <div className="text-xs mt-1">请在属性面板中绑定页面</div>
+               </div>
+             </div>
+           )}
+         </div>
+       );
+     },
      Command: (node) => {
        const items = node.props?.items || [
          { value: "item1", label: "选项1" },
@@ -1156,7 +1455,6 @@ export const registry: Record<string, Renderer> = {
        
        useEffect(() => {
          if (node.props?.required) {
-           const { formValidationManager } = require('./utils/form-validation');
            formValidationManager.updateFieldValue(node.id, 'value', value);
          }
        }, [value, node.id, node.props?.required]);
@@ -1865,6 +2163,78 @@ export const registry: Record<string, Renderer> = {
       </div>
     );
   },
+  EditableTable: (node) => {
+    // 默认数据
+    const defaultData = [
+      { id: 1, name: "张三", age: 25, email: "zhangsan@example.com", status: "active", progress: 75, date: "2024-01-15", department: "技术部" },
+      { id: 2, name: "李四", age: 30, email: "lisi@example.com", status: "inactive", progress: 60, date: "2024-02-20", department: "市场部" },
+      { id: 3, name: "王五", age: 28, email: "wangwu@example.com", status: "active", progress: 90, date: "2024-03-10", department: "设计部" }
+    ];
+
+    // 默认列配置
+    const defaultColumns = [
+      { key: "id", title: "ID", type: "auto-number", width: 80, editable: false },
+      { key: "name", title: "姓名", type: "text", width: 120, editable: true },
+      { key: "age", title: "年龄", type: "number", width: 80, editable: true },
+      { key: "email", title: "邮箱", type: "text", width: 200, editable: true },
+      { key: "status", title: "状态", type: "select", width: 100, editable: true, options: [
+        { label: "激活", value: "active" },
+        { label: "禁用", value: "inactive" }
+      ]},
+      { key: "progress", title: "进度", type: "progress", width: 120, editable: true },
+      { key: "date", title: "日期", type: "date", width: 120, editable: true },
+      { key: "department", title: "部门", type: "lookup", width: 120, editable: true, lookupOptions: [
+        { label: "技术部", value: "技术部" },
+        { label: "市场部", value: "市场部" },
+        { label: "设计部", value: "设计部" },
+        { label: "人事部", value: "人事部" }
+      ]}
+    ];
+
+    return (
+       <EditableTable
+         data={node.props?.data || defaultData}
+         columns={node.props?.columns || defaultColumns}
+         pageSize={node.props?.pageSize || 10}
+         allowAdd={node.props?.allowAdd ?? true}
+         allowDelete={node.props?.allowDelete ?? true}
+         allowEdit={node.props?.allowEdit ?? true}
+         onChange={(newData) => {
+          if (node.props?.events) {
+            (node.props.events as any[]).forEach((ev) => 
+              ev?.type === 'dataChange' && ev?.handler && 
+              execHandler(ev.handler, { data: newData })
+            );
+          }
+        }}
+        onRowAdd={(newRow) => {
+          if (node.props?.events) {
+            (node.props.events as any[]).forEach((ev) => 
+              ev?.type === 'rowAdd' && ev?.handler && 
+              execHandler(ev.handler, { row: newRow })
+            );
+          }
+        }}
+        onRowDelete={(deletedRow) => {
+          if (node.props?.events) {
+            (node.props.events as any[]).forEach((ev) => 
+              ev?.type === 'rowDelete' && ev?.handler && 
+              execHandler(ev.handler, { row: deletedRow })
+            );
+          }
+        }}
+        onCellChange={(rowIndex, columnKey, oldValue, newValue) => {
+          if (node.props?.events) {
+            (node.props.events as any[]).forEach((ev) => 
+              ev?.type === 'cellChange' && ev?.handler && 
+              execHandler(ev.handler, { rowIndex, columnKey, oldValue, newValue })
+            );
+          }
+        }}
+        className={node.props?.className}
+      />
+    );
+  },
   Transfer: (node) => {
     const dataSource = node.props?.dataSource || [
       { key: '1', title: '选项 1' },
@@ -1878,7 +2248,6 @@ export const registry: Record<string, Renderer> = {
     
     useEffect(() => {
       if (node.props?.required) {
-        const { formValidationManager } = require('./utils/form-validation');
         formValidationManager.updateFieldValue(node.id, 'targetKeys', targetKeys);
       }
     }, [targetKeys, node.id, node.props?.required]);
@@ -2110,18 +2479,206 @@ export const registry: Record<string, Renderer> = {
         />
       );
     },
+    NumberInput: (node, ctx) => {
+      const handleChange = (value: string) => {
+        const numValue = parseFloat(value) || 0;
+        execHandler(node.props?.onChange, { value: numValue, node, ctx });
+      };
+
+      return (
+        <Input
+          type="number"
+          placeholder={node.props?.placeholder || '请输入数字'}
+          value={node.props?.value || ''}
+          min={node.props?.min}
+          max={node.props?.max}
+          step={node.props?.step || 1}
+          disabled={node.props?.disabled}
+          onChange={(e) => handleChange(e.target.value)}
+          className={node.props?.className}
+        />
+      );
+    },
+    RichTextEditor: (node, ctx) => {
+      const [content, setContent] = useState(node.props?.content || '');
+
+      const handleChange = (value: string) => {
+        setContent(value);
+        execHandler(node.props?.onChange, { value, node, ctx });
+      };
+
+      return (
+        <div className="border rounded-md">
+          <div className="border-b p-2 bg-gray-50 flex gap-2">
+            <Button size="sm" variant="ghost">B</Button>
+            <Button size="sm" variant="ghost">I</Button>
+            <Button size="sm" variant="ghost">U</Button>
+          </div>
+          <Textarea
+            value={content}
+            onChange={(e) => handleChange(e.target.value)}
+            placeholder={node.props?.placeholder || '请输入内容'}
+            className="border-0 resize-none"
+            rows={node.props?.rows || 6}
+          />
+        </div>
+      );
+    },
+    DatePicker: (node, ctx) => {
+      const handleChange = (value: string) => {
+        execHandler(node.props?.onChange, { value, node, ctx });
+      };
+
+      return (
+        <Input
+          type={node.props?.type || 'date'}
+          value={node.props?.value || ''}
+          min={node.props?.min}
+          max={node.props?.max}
+          disabled={node.props?.disabled}
+          onChange={(e) => handleChange(e.target.value)}
+          className={node.props?.className}
+        />
+      );
+    },
+    MultiSelect: (node, ctx) => {
+      const [selectedValues, setSelectedValues] = useState<string[]>(node.props?.value || []);
+      const options = node.props?.options || [];
+
+      const handleToggle = (value: string) => {
+        const newValues = selectedValues.includes(value)
+          ? selectedValues.filter(v => v !== value)
+          : [...selectedValues, value];
+        setSelectedValues(newValues);
+        execHandler(node.props?.onChange, { value: newValues, node, ctx });
+      };
+
+      return (
+        <div className="space-y-2">
+          <div className="text-sm font-medium">{node.props?.label || '多选'}</div>
+          <div className="border rounded-md p-2 space-y-1">
+            {options.map((option: any) => (
+              <div key={option.value} className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  checked={selectedValues.includes(option.value)}
+                  onChange={() => handleToggle(option.value)}
+                  className="rounded"
+                />
+                <span className="text-sm">{option.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    },
+    Lookup: (node, ctx) => {
+      const [searchValue, setSearchValue] = useState('');
+      const [selectedValue, setSelectedValue] = useState(node.props?.value || '');
+      const options = node.props?.options || [];
+
+      const filteredOptions = options.filter((option: any) =>
+        option.label.toLowerCase().includes(searchValue.toLowerCase())
+      );
+
+      const handleSelect = (value: string) => {
+        setSelectedValue(value);
+        setSearchValue('');
+        execHandler(node.props?.onChange, { value, node, ctx });
+      };
+
+      return (
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className="w-full justify-between">
+              {selectedValue ? options.find((opt: any) => opt.value === selectedValue)?.label : node.props?.placeholder || '请选择'}
+              <ArrowUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-full p-0">
+            <Command>
+              <CommandInput
+                placeholder="搜索..."
+                value={searchValue}
+                onValueChange={setSearchValue}
+              />
+              <CommandEmpty>未找到选项</CommandEmpty>
+              <CommandList>
+                <CommandGroup>
+                  {filteredOptions.map((option: any) => (
+                    <CommandItem
+                      key={option.value}
+                      onSelect={() => handleSelect(option.value)}
+                    >
+                      {option.label}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
+      );
+    },
+    Link: (node, ctx) => {
+      const handleClick = () => {
+        execHandler(node.props?.onClick, { node, ctx });
+      };
+
+      return (
+        <a
+          href={node.props?.href || '#'}
+          target={node.props?.target || '_self'}
+          className={cn(
+            "text-blue-600 hover:text-blue-800 underline",
+            node.props?.className
+          )}
+          onClick={handleClick}
+        >
+          {node.props?.text || '链接'}
+        </a>
+      );
+    },
+    Image: (node, ctx) => {
+      const handleLoad = () => {
+        execHandler(node.props?.onLoad, { node, ctx });
+      };
+
+      const handleError = () => {
+        execHandler(node.props?.onError, { node, ctx });
+      };
+
+      return (
+        <img
+          src={node.props?.src || 'https://via.placeholder.com/300x200'}
+          alt={node.props?.alt || '图片'}
+          width={node.props?.width}
+          height={node.props?.height}
+          className={cn("max-w-full h-auto", node.props?.className)}
+          onLoad={handleLoad}
+          onError={handleError}
+        />
+      );
+    },
 };
 
 export function NodeRenderer({ node, ctx }: { node: NodeMeta; ctx: any }) {
   const Comp = registry[node.type];
+  // 确保hooks在所有渲染路径中都被调用
+  const [over, setOver] = useState(false);
+  
   if (!Comp) return <div>未知组件: {node.type}</div>;
 
   if (!ctx?.design) {
+    // 获取间距样式类名
+    const spacingClasses = getSpacingClasses(node.margin, node.padding);
+    
     return (
       <div 
         id={node.id} 
         className={cn(
           node.type === "Container" ? "h-full" : "",
+          spacingClasses,
           node.props?.className
         )} 
         style={node.props?.style}
@@ -2132,7 +2689,6 @@ export function NodeRenderer({ node, ctx }: { node: NodeMeta; ctx: any }) {
   }
 
   // Design mode wrapper: selection, drag, drop-before/after
-  const [over, setOver] = useState(false);
   const droppable = node.type === "Container" || node.type === "Card" || node.type === "CollapsibleCard" || node.type === "ActionCard" || node.type === "InfoCard" || node.type === "StatsCard";
   
   const handleDragStart = (e: React.DragEvent) => {
@@ -2417,6 +2973,7 @@ export function NodeRenderer({ node, ctx }: { node: NodeMeta; ctx: any }) {
             "relative",
             ctx.selectedId === node.id && "ring-2 ring-blue-500/60 rounded",
             droppable && over && "ring-2 ring-ring/60 rounded bg-accent/10",
+            getSpacingClasses(node.margin, node.padding),
             node.props?.className,
           )}
           draggable={node.locked || !(ctx.rootNode && isNodeInLockedContainer(node.id, ctx.rootNode))} // 锁定容器本身可拖拽，但其子组件不可拖拽

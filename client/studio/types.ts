@@ -1,4 +1,5 @@
 import { generateUUID } from "@/lib/utils";
+import { getDefaultSpacing } from "./utils/spacing";
 
 export type NodeId = string;
 
@@ -27,6 +28,7 @@ export type ComponentType =
   | "Dialog"
   | "Alert"
   | "Table"
+  | "EditableTable"
   | "Listener"
   | "Accordion"
   | "Collapsible"
@@ -45,6 +47,20 @@ export type ComponentType =
   | "ScriptEditor"
   | "EventListener";
 
+// Tailwind CSS 间距值类型
+export type SpacingValue = "0" | "px" | "0.5" | "1" | "1.5" | "2" | "2.5" | "3" | "3.5" | "4" | "5" | "6" | "7" | "8" | "9" | "10" | "11" | "12" | "14" | "16" | "20" | "24" | "28" | "32" | "36" | "40" | "44" | "48" | "52" | "56" | "60" | "64" | "72" | "80" | "96";
+
+// 间距配置接口
+export interface SpacingConfig {
+  top?: SpacingValue;
+  right?: SpacingValue;
+  bottom?: SpacingValue;
+  left?: SpacingValue;
+  x?: SpacingValue; // 水平方向（left + right）
+  y?: SpacingValue; // 垂直方向（top + bottom）
+  all?: SpacingValue; // 所有方向
+}
+
 export interface NodeMeta {
   id: NodeId;
   type: ComponentType;
@@ -62,6 +78,8 @@ export interface NodeMeta {
   gridRows?: number; // Grid布局的行数
   gridGap?: number; // Grid布局的间距
   style?: Record<string, any>; // 内联样式
+  margin?: SpacingConfig; // 外边距配置
+  padding?: SpacingConfig; // 内边距配置
 }
 
 export type TemplateKind = "blank" | "content" | "vscode" | "landing" | "email" | "home" | "admin" | "grid" | "dashboard";
@@ -88,6 +106,9 @@ export interface CustomComponent {
 }
 
 export function createNode(type: ComponentType, partial?: Partial<NodeMeta>): NodeMeta {
+  // 获取默认间距配置
+  const defaultSpacing = getDefaultSpacing(type);
+  
   const baseNode = {
     id: generateUUID(),
     type,
@@ -101,6 +122,8 @@ export function createNode(type: ComponentType, partial?: Partial<NodeMeta>): No
     gridCols: type === "Container" ? 3 : undefined, // Container默认3列
     gridRows: type === "Container" ? undefined : undefined, // 行数自动
     gridGap: type === "Container" ? 4 : undefined, // 默认间距4
+    margin: defaultSpacing.margin, // 设置默认外边距
+    padding: defaultSpacing.padding, // 设置默认内边距
     ...partial,
   };
   
