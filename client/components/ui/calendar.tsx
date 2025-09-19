@@ -17,6 +17,16 @@ function Calendar({
     <DayPicker
       showOutsideDays={showOutsideDays}
       className={cn("p-3", className)}
+      weekStartsOn={1}
+      formatters={{
+        formatWeekdayName: (date) => {
+          // 当weekStartsOn=1时，需要调整映射
+          const weekdays = ['一', '二', '三', '四', '五', '六', '日'];
+          // 获取相对于周一的索引
+          const dayIndex = (date.getDay() + 6) % 7;
+          return weekdays[dayIndex];
+        }
+      }}
       classNames={{
         months: "flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0",
         month: "space-y-4",

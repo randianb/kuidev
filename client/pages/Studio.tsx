@@ -4381,8 +4381,206 @@ function Inspector({
           </AccordionItem>
         )}
 
+        {/* 输入框设置 */}
+        {local.type === "Input" && (
+          <AccordionItem value="input-config">
+            <AccordionTrigger className="text-sm font-medium">
+              输入框设置
+            </AccordionTrigger>
+            <AccordionContent className="space-y-3">
+              <div className="grid gap-2">
+                <label className="text-xs">字段标签</label>
+                <Input 
+                  value={local.props?.label ?? ""} 
+                  onChange={(e) => set("label", e.target.value)} 
+                  placeholder="请输入字段标签"
+                />
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <Switch 
+                  id="required" 
+                  checked={local.props?.required === true} 
+                  onCheckedChange={(checked) => set("required", checked)} 
+                />
+                <label htmlFor="required" className="text-xs">必填字段</label>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <Switch 
+                  id="disabled" 
+                  checked={local.props?.disabled === true} 
+                  onCheckedChange={(checked) => set("disabled", checked)} 
+                />
+                <label htmlFor="disabled" className="text-xs">禁用状态</label>
+              </div>
+              
+              <div className="grid gap-2">
+                <label className="text-xs">占位符</label>
+                <Input 
+                  value={local.props?.placeholder ?? ""} 
+                  onChange={(e) => set("placeholder", e.target.value)} 
+                  placeholder="请输入占位符文本"
+                />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-xs">默认值</label>
+                <Input 
+                  value={local.props?.defaultValue ?? ""} 
+                  onChange={(e) => set("defaultValue", e.target.value)} 
+                  placeholder="请输入默认值"
+                />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-xs">输入类型</label>
+                <Select value={local.props?.type ?? "text"} onValueChange={(value) => set("type", value)}>
+                  <SelectTrigger className="h-8">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="text">文本</SelectItem>
+                    <SelectItem value="password">密码</SelectItem>
+                    <SelectItem value="email">邮箱</SelectItem>
+                    <SelectItem value="number">数字</SelectItem>
+                    <SelectItem value="tel">电话</SelectItem>
+                    <SelectItem value="url">网址</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <Separator />
+              
+              <div className="grid gap-2">
+                <div className="flex items-center gap-2">
+                  <Switch 
+                    id="prefix-button" 
+                    checked={local.props?.prefixButton?.enabled === true} 
+                    onCheckedChange={(checked) => set("prefixButton", { ...local.props?.prefixButton, enabled: checked })} 
+                  />
+                  <label htmlFor="prefix-button" className="text-xs">前缀按钮</label>
+                </div>
+                {local.props?.prefixButton?.enabled && (
+                  <div className="ml-4 space-y-2">
+                    <div className="grid gap-2">
+                      <label className="text-xs">按钮文字</label>
+                      <Input 
+                        value={local.props?.prefixButton?.text ?? ""} 
+                        onChange={(e) => set("prefixButton", { ...local.props?.prefixButton, text: e.target.value })} 
+                        placeholder="按钮文字"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-xs">按钮图标</label>
+                      <Select 
+                        value={local.props?.prefixButton?.icon ?? "none"} 
+                        onValueChange={(value) => set("prefixButton", { ...local.props?.prefixButton, icon: value === "none" ? undefined : value })}
+                      >
+                        <SelectTrigger className="h-8">
+                          <SelectValue placeholder="选择图标" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">无图标</SelectItem>
+                          <SelectItem value="search">搜索</SelectItem>
+                          <SelectItem value="plus">加号</SelectItem>
+                          <SelectItem value="edit">编辑</SelectItem>
+                          <SelectItem value="save">保存</SelectItem>
+                          <SelectItem value="settings">设置</SelectItem>
+                          <SelectItem value="user">用户</SelectItem>
+                          <SelectItem value="home">首页</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-xs">按钮样式</label>
+                      <Select 
+                        value={local.props?.prefixButton?.variant ?? "outline"} 
+                        onValueChange={(value) => set("prefixButton", { ...local.props?.prefixButton, variant: value })}
+                      >
+                        <SelectTrigger className="h-8">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="default">默认</SelectItem>
+                          <SelectItem value="destructive">危险</SelectItem>
+                          <SelectItem value="outline">轮廓</SelectItem>
+                          <SelectItem value="secondary">次要</SelectItem>
+                          <SelectItem value="ghost">幽灵</SelectItem>
+                          <SelectItem value="link">链接</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              <div className="grid gap-2">
+                <div className="flex items-center gap-2">
+                  <Switch 
+                    id="suffix-button" 
+                    checked={local.props?.suffixButton?.enabled === true} 
+                    onCheckedChange={(checked) => set("suffixButton", { ...local.props?.suffixButton, enabled: checked })} 
+                  />
+                  <label htmlFor="suffix-button" className="text-xs">后缀按钮</label>
+                </div>
+                {local.props?.suffixButton?.enabled && (
+                  <div className="ml-4 space-y-2">
+                    <div className="grid gap-2">
+                      <label className="text-xs">按钮文字</label>
+                      <Input 
+                        value={local.props?.suffixButton?.text ?? ""} 
+                        onChange={(e) => set("suffixButton", { ...local.props?.suffixButton, text: e.target.value })} 
+                        placeholder="按钮文字"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-xs">按钮图标</label>
+                      <Select 
+                        value={local.props?.suffixButton?.icon ?? "none"} 
+                        onValueChange={(value) => set("suffixButton", { ...local.props?.suffixButton, icon: value === "none" ? undefined : value })}
+                      >
+                        <SelectTrigger className="h-8">
+                          <SelectValue placeholder="选择图标" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">无图标</SelectItem>
+                          <SelectItem value="search">搜索</SelectItem>
+                          <SelectItem value="plus">加号</SelectItem>
+                          <SelectItem value="edit">编辑</SelectItem>
+                          <SelectItem value="save">保存</SelectItem>
+                          <SelectItem value="settings">设置</SelectItem>
+                          <SelectItem value="user">用户</SelectItem>
+                          <SelectItem value="home">首页</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-xs">按钮样式</label>
+                      <Select 
+                        value={local.props?.suffixButton?.variant ?? "outline"} 
+                        onValueChange={(value) => set("suffixButton", { ...local.props?.suffixButton, variant: value })}
+                      >
+                        <SelectTrigger className="h-8">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="default">默认</SelectItem>
+                          <SelectItem value="destructive">危险</SelectItem>
+                          <SelectItem value="outline">轮廓</SelectItem>
+                          <SelectItem value="secondary">次要</SelectItem>
+                          <SelectItem value="ghost">幽灵</SelectItem>
+                          <SelectItem value="link">链接</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        )}
+
         {/* 表单组件配置 */}
-        {["Input", "Textarea", "Switch", "Slider", "Select", "Transfer", "Upload"].includes(local.type) && (
+        {["Textarea", "Switch", "Slider", "Select", "Transfer", "Upload"].includes(local.type) && (
           <AccordionItem value="form-config">
             <AccordionTrigger className="text-sm font-medium">
               表单配置
@@ -4406,196 +4604,131 @@ function Inspector({
                 <label htmlFor="required" className="text-xs">必填字段</label>
               </div>
               
-              {local.type === "Input" && (
-                <>
-                  <div className="grid gap-2">
-                    <label className="text-xs">占位符</label>
-                    <Input 
-                      value={local.props?.placeholder ?? ""} 
-                      onChange={(e) => set("placeholder", e.target.value)} 
-                      placeholder="请输入占位符文本"
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <label className="text-xs">默认值</label>
-                    <Input 
-                      value={local.props?.defaultValue ?? ""} 
-                      onChange={(e) => set("defaultValue", e.target.value)} 
-                      placeholder="请输入默认值"
-                    />
-                  </div>
-                  
-                  <Separator />
-                  
-                  <div className="grid gap-2">
-                    <div className="flex items-center gap-2">
-                      <Switch 
-                        id="prefix-button" 
-                        checked={local.props?.prefixButton?.enabled === true} 
-                        onCheckedChange={(checked) => set("prefixButton", { ...local.props?.prefixButton, enabled: checked })} 
-                      />
-                      <label htmlFor="prefix-button" className="text-xs">前缀按钮</label>
-                    </div>
-                    {local.props?.prefixButton?.enabled && (
-                      <div className="ml-4 space-y-2">
-                        <div className="grid gap-2">
-                          <label className="text-xs">按钮文字</label>
-                          <Input 
-                            value={local.props?.prefixButton?.text ?? ""} 
-                            onChange={(e) => set("prefixButton", { ...local.props?.prefixButton, text: e.target.value })} 
-                            placeholder="按钮文字"
-                          />
-                        </div>
-                        <div className="grid gap-2">
-                          <label className="text-xs">按钮图标</label>
-                          <Select 
-                            value={local.props?.prefixButton?.icon ?? ""} 
-                            onValueChange={(value) => set("prefixButton", { ...local.props?.prefixButton, icon: value })}
-                          >
-                            <SelectTrigger className="h-8">
-                              <SelectValue placeholder="选择图标" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="">无图标</SelectItem>
-                              <SelectItem value="search">搜索</SelectItem>
-                              <SelectItem value="plus">加号</SelectItem>
-                              <SelectItem value="edit">编辑</SelectItem>
-                              <SelectItem value="save">保存</SelectItem>
-                              <SelectItem value="settings">设置</SelectItem>
-                              <SelectItem value="user">用户</SelectItem>
-                              <SelectItem value="home">首页</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="grid gap-2">
-                          <label className="text-xs">按钮样式</label>
-                          <Select 
-                            value={local.props?.prefixButton?.variant ?? "outline"} 
-                            onValueChange={(value) => set("prefixButton", { ...local.props?.prefixButton, variant: value })}
-                          >
-                            <SelectTrigger className="h-8">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="default">默认</SelectItem>
-                              <SelectItem value="destructive">危险</SelectItem>
-                              <SelectItem value="outline">轮廓</SelectItem>
-                              <SelectItem value="secondary">次要</SelectItem>
-                              <SelectItem value="ghost">幽灵</SelectItem>
-                              <SelectItem value="link">链接</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="grid gap-2">
-                    <div className="flex items-center gap-2">
-                      <Switch 
-                        id="suffix-button" 
-                        checked={local.props?.suffixButton?.enabled === true} 
-                        onCheckedChange={(checked) => set("suffixButton", { ...local.props?.suffixButton, enabled: checked })} 
-                      />
-                      <label htmlFor="suffix-button" className="text-xs">后缀按钮</label>
-                    </div>
-                    {local.props?.suffixButton?.enabled && (
-                      <div className="ml-4 space-y-2">
-                        <div className="grid gap-2">
-                          <label className="text-xs">按钮文字</label>
-                          <Input 
-                            value={local.props?.suffixButton?.text ?? ""} 
-                            onChange={(e) => set("suffixButton", { ...local.props?.suffixButton, text: e.target.value })} 
-                            placeholder="按钮文字"
-                          />
-                        </div>
-                        <div className="grid gap-2">
-                          <label className="text-xs">按钮图标</label>
-                          <Select 
-                            value={local.props?.suffixButton?.icon ?? ""} 
-                            onValueChange={(value) => set("suffixButton", { ...local.props?.suffixButton, icon: value })}
-                          >
-                            <SelectTrigger className="h-8">
-                              <SelectValue placeholder="选择图标" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="">无图标</SelectItem>
-                              <SelectItem value="search">搜索</SelectItem>
-                              <SelectItem value="plus">加号</SelectItem>
-                              <SelectItem value="edit">编辑</SelectItem>
-                              <SelectItem value="save">保存</SelectItem>
-                              <SelectItem value="settings">设置</SelectItem>
-                              <SelectItem value="user">用户</SelectItem>
-                              <SelectItem value="home">首页</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="grid gap-2">
-                          <label className="text-xs">按钮样式</label>
-                          <Select 
-                            value={local.props?.suffixButton?.variant ?? "outline"} 
-                            onValueChange={(value) => set("suffixButton", { ...local.props?.suffixButton, variant: value })}
-                          >
-                            <SelectTrigger className="h-8">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="default">默认</SelectItem>
-                              <SelectItem value="destructive">危险</SelectItem>
-                              <SelectItem value="outline">轮廓</SelectItem>
-                              <SelectItem value="secondary">次要</SelectItem>
-                              <SelectItem value="ghost">幽灵</SelectItem>
-                              <SelectItem value="link">链接</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
-              
               {local.type === "Textarea" && (
-                <>
-                  <div className="grid gap-2">
-                    <label className="text-xs">占位符</label>
-                    <Input 
-                      value={local.props?.placeholder ?? ""} 
-                      onChange={(e) => set("placeholder", e.target.value)} 
-                      placeholder="请输入占位符文本"
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <label className="text-xs">默认值</label>
-                    <Textarea 
-                      value={local.props?.defaultValue ?? ""} 
-                      onChange={(e) => set("defaultValue", e.target.value)} 
-                      placeholder="请输入默认值"
-                      rows={3}
-                    />
-                  </div>
-                </>
+                <AccordionItem value="textarea-config">
+                  <AccordionTrigger className="text-sm font-medium">
+                    文本域配置
+                  </AccordionTrigger>
+                  <AccordionContent className="space-y-3">
+                    <div className="grid gap-2">
+                      <label className="text-xs">占位符</label>
+                      <Input 
+                        value={local.props?.placeholder ?? ""} 
+                        onChange={(e) => set("placeholder", e.target.value)} 
+                        placeholder="请输入占位符文本"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-xs">默认值</label>
+                      <Textarea 
+                        value={local.props?.defaultValue ?? ""} 
+                        onChange={(e) => set("defaultValue", e.target.value)} 
+                        placeholder="请输入默认值"
+                        rows={3}
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-xs">行数</label>
+                      <Input 
+                        type="number"
+                        value={local.props?.rows ?? 3} 
+                        onChange={(e) => set("rows", parseInt(e.target.value) || 3)} 
+                        placeholder="行数"
+                        min="1"
+                        max="20"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-xs">最大长度</label>
+                      <Input 
+                        type="number"
+                        value={local.props?.maxLength ?? ""} 
+                        onChange={(e) => set("maxLength", e.target.value ? parseInt(e.target.value) : undefined)} 
+                        placeholder="最大字符数"
+                        min="1"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Switch 
+                        id="textarea-disabled" 
+                        checked={local.props?.disabled === true} 
+                        onCheckedChange={(checked) => set("disabled", checked)} 
+                      />
+                      <label htmlFor="textarea-disabled" className="text-xs">禁用状态</label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Switch 
+                        id="textarea-required" 
+                        checked={local.props?.required === true} 
+                        onCheckedChange={(checked) => set("required", checked)} 
+                      />
+                      <label htmlFor="textarea-required" className="text-xs">必填字段</label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Switch 
+                        id="textarea-resize" 
+                        checked={local.props?.resize !== false} 
+                        onCheckedChange={(checked) => set("resize", checked)} 
+                      />
+                      <label htmlFor="textarea-resize" className="text-xs">允许调整大小</label>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
               )}
               
               {local.type === "Switch" && (
-                <>
-                  <div className="grid gap-2">
-                    <label className="text-xs">开关标题</label>
-                    <Input 
-                      value={local.props?.title ?? ""} 
-                      onChange={(e) => set("title", e.target.value)} 
-                      placeholder="请输入开关标题"
-                    />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Switch 
-                      id="defaultChecked" 
-                      checked={local.props?.checked === true} 
-                      onCheckedChange={(checked) => set("checked", checked)} 
-                    />
-                    <label htmlFor="defaultChecked" className="text-xs">默认选中</label>
-                  </div>
-                </>
+                <AccordionItem value="switch-config">
+                  <AccordionTrigger className="text-sm font-medium">
+                    开关配置
+                  </AccordionTrigger>
+                  <AccordionContent className="space-y-3">
+                    <div className="grid gap-2">
+                      <label className="text-xs">开关标题</label>
+                      <Input 
+                        value={local.props?.title ?? ""} 
+                        onChange={(e) => set("title", e.target.value)} 
+                        placeholder="请输入开关标题"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-xs">描述文本</label>
+                      <Input 
+                        value={local.props?.description ?? ""} 
+                        onChange={(e) => set("description", e.target.value)} 
+                        placeholder="开关的描述信息"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Switch 
+                        id="defaultChecked" 
+                        checked={local.props?.checked === true} 
+                        onCheckedChange={(checked) => set("checked", checked)} 
+                      />
+                      <label htmlFor="defaultChecked" className="text-xs">默认选中</label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Switch 
+                        id="switch-disabled" 
+                        checked={local.props?.disabled === true} 
+                        onCheckedChange={(checked) => set("disabled", checked)} 
+                      />
+                      <label htmlFor="switch-disabled" className="text-xs">禁用状态</label>
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-xs">开关大小</label>
+                      <Select value={local.props?.size ?? "default"} onValueChange={(value) => set("size", value)}>
+                        <SelectTrigger className="h-8">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="sm">小</SelectItem>
+                          <SelectItem value="default">默认</SelectItem>
+                          <SelectItem value="lg">大</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
               )}
               
               {/* 数据绑定配置 */}
@@ -4617,182 +4750,366 @@ function Inspector({
               </div>
               
               {local.type === "Select" && (
-                <>
-                  <Separator />
-                  <div className="grid gap-2">
-                    <label className="text-xs">占位符</label>
-                    <Input 
-                      value={local.props?.placeholder ?? ""} 
-                      onChange={(e) => set("placeholder", e.target.value)} 
-                      placeholder="请选择..."
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <label className="text-xs">选项配置 (JSON)</label>
-                    <Textarea 
-                      value={JSON.stringify(local.props?.options ?? [], null, 2)} 
-                      onChange={(e) => {
-                        try {
-                          const options = JSON.parse(e.target.value);
-                          set("options", options);
-                        } catch (err) {
-                          // 忽略JSON解析错误
-                        }
-                      }} 
-                      placeholder='[{"value": "option1", "label": "选项1"}]'
-                      rows={4}
-                    />
-                  </div>
-                </>
+                <AccordionItem value="select-config">
+                  <AccordionTrigger className="text-sm font-medium">
+                    选择器配置
+                  </AccordionTrigger>
+                  <AccordionContent className="space-y-3">
+                    <div className="grid gap-2">
+                      <label className="text-xs">占位符</label>
+                      <Input 
+                        value={local.props?.placeholder ?? ""} 
+                        onChange={(e) => set("placeholder", e.target.value)} 
+                        placeholder="请选择..."
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-xs">默认值</label>
+                      <Input 
+                        value={local.props?.defaultValue ?? ""} 
+                        onChange={(e) => set("defaultValue", e.target.value)} 
+                        placeholder="默认选中的值"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-xs">选项配置 (JSON)</label>
+                      <Textarea 
+                        value={JSON.stringify(local.props?.options ?? [], null, 2)} 
+                        onChange={(e) => {
+                          try {
+                            const options = JSON.parse(e.target.value);
+                            set("options", options);
+                          } catch (err) {
+                            // 忽略JSON解析错误
+                          }
+                        }} 
+                        placeholder='[{"value": "option1", "label": "选项1"}]'
+                        rows={4}
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Switch 
+                        id="select-disabled" 
+                        checked={local.props?.disabled === true} 
+                        onCheckedChange={(checked) => set("disabled", checked)} 
+                      />
+                      <label htmlFor="select-disabled" className="text-xs">禁用状态</label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Switch 
+                        id="select-required" 
+                        checked={local.props?.required === true} 
+                        onCheckedChange={(checked) => set("required", checked)} 
+                      />
+                      <label htmlFor="select-required" className="text-xs">必填字段</label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Switch 
+                        id="select-multiple" 
+                        checked={local.props?.multiple === true} 
+                        onCheckedChange={(checked) => set("multiple", checked)} 
+                      />
+                      <label htmlFor="select-multiple" className="text-xs">多选模式</label>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
               )}
               
               {local.type === "Upload" && (
-                <>
-                  <div className="grid gap-2">
-                    <label className="text-xs">接受的文件类型</label>
-                    <Input 
-                      value={local.props?.accept ?? ""} 
-                      onChange={(e) => set("accept", e.target.value)} 
-                      placeholder=".jpg,.png,.pdf"
-                    />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Switch 
-                      id="multiple" 
-                      checked={local.props?.multiple === true} 
-                      onCheckedChange={(checked) => set("multiple", checked)} 
-                    />
-                    <label htmlFor="multiple" className="text-xs">允许多选</label>
-                  </div>
-                  <div className="grid gap-2">
-                    <label className="text-xs">最大文件数</label>
-                    <Input 
-                      type="number"
-                      value={local.props?.maxCount ?? 1} 
-                      onChange={(e) => set("maxCount", Number(e.target.value))} 
-                    />
-                  </div>
-                </>
+                <AccordionItem value="upload-settings">
+                  <AccordionTrigger className="text-sm font-medium">
+                    Upload 高级设置
+                  </AccordionTrigger>
+                  <AccordionContent className="space-y-4">
+                    <div className="grid gap-2">
+                      <label className="text-xs">标签</label>
+                      <Input 
+                        value={local.props?.label ?? ""} 
+                        onChange={(e) => set("label", e.target.value)} 
+                        placeholder="选择文件"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-xs">接受的文件类型</label>
+                      <Input 
+                        value={local.props?.accept ?? ""} 
+                        onChange={(e) => set("accept", e.target.value)} 
+                        placeholder=".jpg,.png,.pdf"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Switch 
+                        id="multiple" 
+                        checked={local.props?.multiple === true} 
+                        onCheckedChange={(checked) => set("multiple", checked)} 
+                      />
+                      <label htmlFor="multiple" className="text-xs">允许多选</label>
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-xs">最大文件数</label>
+                      <Input 
+                        type="number"
+                        value={local.props?.maxCount ?? 1} 
+                        onChange={(e) => set("maxCount", Number(e.target.value))} 
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-xs">最大文件大小 (MB)</label>
+                      <Input 
+                        type="number"
+                        value={local.props?.maxSize ?? 10} 
+                        onChange={(e) => set("maxSize", Number(e.target.value))} 
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Switch 
+                        id="disabled" 
+                        checked={local.props?.disabled === true} 
+                        onCheckedChange={(checked) => set("disabled", checked)} 
+                      />
+                      <label htmlFor="disabled" className="text-xs">禁用状态</label>
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-xs">上传提示文本</label>
+                      <Input 
+                        value={local.props?.description ?? ""} 
+                        onChange={(e) => set("description", e.target.value)} 
+                        placeholder="拖拽文件到此处或点击选择"
+                      />
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
               )}
 
               {local.type === "NumberInput" && (
-                <>
-                  <div className="grid gap-2">
-                    <label className="text-xs">占位符</label>
-                    <Input 
-                      value={local.props?.placeholder ?? ""} 
-                      onChange={(e) => set("placeholder", e.target.value)} 
-                      placeholder="请输入数字"
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <label className="text-xs">默认值</label>
-                    <Input 
-                      type="number"
-                      value={local.props?.value ?? ""} 
-                      onChange={(e) => set("value", e.target.value)} 
-                      placeholder="0"
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <label className="text-xs">最小值</label>
-                    <Input 
-                      type="number"
-                      value={local.props?.min ?? ""} 
-                      onChange={(e) => set("min", e.target.value)} 
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <label className="text-xs">最大值</label>
-                    <Input 
-                      type="number"
-                      value={local.props?.max ?? ""} 
-                      onChange={(e) => set("max", e.target.value)} 
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <label className="text-xs">步长</label>
-                    <Input 
-                      type="number"
-                      value={local.props?.step ?? 1} 
-                      onChange={(e) => set("step", Number(e.target.value))} 
-                    />
-                  </div>
-                </>
+                <AccordionItem value="numberinput-settings">
+                  <AccordionTrigger className="text-sm font-medium">
+                    NumberInput 高级设置
+                  </AccordionTrigger>
+                  <AccordionContent className="space-y-4">
+                    <div className="grid gap-2">
+                      <label className="text-xs">标签</label>
+                      <Input 
+                        value={local.props?.label ?? ""} 
+                        onChange={(e) => set("label", e.target.value)} 
+                        placeholder="数字输入"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-xs">占位符</label>
+                      <Input 
+                        value={local.props?.placeholder ?? ""} 
+                        onChange={(e) => set("placeholder", e.target.value)} 
+                        placeholder="请输入数字"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-xs">默认值</label>
+                      <Input 
+                        type="number"
+                        value={local.props?.value ?? ""} 
+                        onChange={(e) => set("value", e.target.value)} 
+                        placeholder="0"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-xs">最小值</label>
+                      <Input 
+                        type="number"
+                        value={local.props?.min ?? ""} 
+                        onChange={(e) => set("min", e.target.value)} 
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-xs">最大值</label>
+                      <Input 
+                        type="number"
+                        value={local.props?.max ?? ""} 
+                        onChange={(e) => set("max", e.target.value)} 
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-xs">步长</label>
+                      <Input 
+                        type="number"
+                        value={local.props?.step ?? 1} 
+                        onChange={(e) => set("step", Number(e.target.value))} 
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Switch 
+                        id="disabled" 
+                        checked={local.props?.disabled === true} 
+                        onCheckedChange={(checked) => set("disabled", checked)} 
+                      />
+                      <label htmlFor="disabled" className="text-xs">禁用状态</label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Switch 
+                        id="required" 
+                        checked={local.props?.required === true} 
+                        onCheckedChange={(checked) => set("required", checked)} 
+                      />
+                      <label htmlFor="required" className="text-xs">必填字段</label>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
               )}
 
               {local.type === "RichTextEditor" && (
-                <>
-                  <div className="grid gap-2">
-                    <label className="text-xs">占位符</label>
-                    <Input 
-                      value={local.props?.placeholder ?? ""} 
-                      onChange={(e) => set("placeholder", e.target.value)} 
-                      placeholder="请输入内容"
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <label className="text-xs">默认内容</label>
-                    <Textarea 
-                      value={local.props?.content ?? ""} 
-                      onChange={(e) => set("content", e.target.value)} 
-                      placeholder="默认内容"
-                      rows={3}
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <label className="text-xs">行数</label>
-                    <Input 
-                      type="number"
-                      value={local.props?.rows ?? 6} 
-                      onChange={(e) => set("rows", Number(e.target.value))} 
-                    />
-                  </div>
-                </>
+                <AccordionItem value="richtexteditor-settings">
+                  <AccordionTrigger className="text-sm font-medium">
+                    RichTextEditor 高级设置
+                  </AccordionTrigger>
+                  <AccordionContent className="space-y-4">
+                    <div className="grid gap-2">
+                      <label className="text-xs">标签</label>
+                      <Input 
+                        value={local.props?.label ?? ""} 
+                        onChange={(e) => set("label", e.target.value)} 
+                        placeholder="富文本编辑器"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-xs">占位符</label>
+                      <Input 
+                        value={local.props?.placeholder ?? ""} 
+                        onChange={(e) => set("placeholder", e.target.value)} 
+                        placeholder="请输入内容"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-xs">默认内容</label>
+                      <Textarea 
+                        value={local.props?.content ?? ""} 
+                        onChange={(e) => set("content", e.target.value)} 
+                        placeholder="默认内容"
+                        rows={3}
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-xs">行数</label>
+                      <Input 
+                        type="number"
+                        value={local.props?.rows ?? 6} 
+                        onChange={(e) => set("rows", Number(e.target.value))} 
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Switch 
+                        id="disabled" 
+                        checked={local.props?.disabled === true} 
+                        onCheckedChange={(checked) => set("disabled", checked)} 
+                      />
+                      <label htmlFor="disabled" className="text-xs">禁用状态</label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Switch 
+                        id="required" 
+                        checked={local.props?.required === true} 
+                        onCheckedChange={(checked) => set("required", checked)} 
+                      />
+                      <label htmlFor="required" className="text-xs">必填字段</label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Switch 
+                        id="showToolbar" 
+                        checked={local.props?.showToolbar !== false} 
+                        onCheckedChange={(checked) => set("showToolbar", checked)} 
+                      />
+                      <label htmlFor="showToolbar" className="text-xs">显示工具栏</label>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
               )}
 
               {local.type === "DatePicker" && (
-                <>
-                  <div className="grid gap-2">
-                    <label className="text-xs">日期类型</label>
-                    <Select value={local.props?.type ?? "date"} onValueChange={(v) => set("type", v)}>
-                      <SelectTrigger className="h-8">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="date">日期</SelectItem>
-                        <SelectItem value="datetime-local">日期时间</SelectItem>
-                        <SelectItem value="time">时间</SelectItem>
-                        <SelectItem value="month">月份</SelectItem>
-                        <SelectItem value="week">周</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid gap-2">
-                    <label className="text-xs">默认值</label>
-                    <Input 
-                      value={local.props?.value ?? ""} 
-                      onChange={(e) => set("value", e.target.value)} 
-                      placeholder="2024-01-01"
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <label className="text-xs">最小日期</label>
-                    <Input 
-                      value={local.props?.min ?? ""} 
-                      onChange={(e) => set("min", e.target.value)} 
-                      placeholder="2020-01-01"
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <label className="text-xs">最大日期</label>
-                    <Input 
-                      value={local.props?.max ?? ""} 
-                      onChange={(e) => set("max", e.target.value)} 
-                      placeholder="2030-12-31"
-                    />
-                  </div>
-                </>
+                <AccordionItem value="datepicker-config">
+                  <AccordionTrigger className="text-sm font-medium">
+                    日期选择器配置
+                  </AccordionTrigger>
+                  <AccordionContent className="space-y-3">
+                    <div className="grid gap-2">
+                      <label className="text-xs">标签</label>
+                      <Input 
+                        value={local.props?.label ?? ""} 
+                        onChange={(e) => set("label", e.target.value)} 
+                        placeholder="日期选择器"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-xs">日期类型</label>
+                      <Select value={local.props?.type ?? "date"} onValueChange={(v) => set("type", v)}>
+                        <SelectTrigger className="h-8">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="date">日期</SelectItem>
+                          <SelectItem value="datetime-local">日期时间</SelectItem>
+                          <SelectItem value="time">时间</SelectItem>
+                          <SelectItem value="month">月份</SelectItem>
+                          <SelectItem value="week">周</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-xs">占位符文本</label>
+                      <Input 
+                        value={local.props?.placeholder ?? ""} 
+                        onChange={(e) => set("placeholder", e.target.value)} 
+                        placeholder="选择日期"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-xs">默认值</label>
+                      <Input 
+                        value={local.props?.value ?? ""} 
+                        onChange={(e) => set("value", e.target.value)} 
+                        placeholder="2024-01-01"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-xs">最小日期</label>
+                      <Input 
+                        value={local.props?.min ?? ""} 
+                        onChange={(e) => set("min", e.target.value)} 
+                        placeholder="2020-01-01"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-xs">最大日期</label>
+                      <Input 
+                        value={local.props?.max ?? ""} 
+                        onChange={(e) => set("max", e.target.value)} 
+                        placeholder="2030-12-31"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-xs">禁用状态</label>
+                      <div className="flex items-center space-x-2">
+                        <Switch 
+                          checked={local.props?.disabled ?? false} 
+                          onCheckedChange={(checked) => set("disabled", checked)} 
+                        />
+                        <span className="text-xs text-muted-foreground">
+                          {local.props?.disabled ? "已禁用" : "已启用"}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-xs">必填字段</label>
+                      <div className="flex items-center space-x-2">
+                        <Switch 
+                          checked={local.props?.required ?? false} 
+                          onCheckedChange={(checked) => set("required", checked)} 
+                        />
+                        <span className="text-xs text-muted-foreground">
+                          {local.props?.required ? "必填" : "可选"}
+                        </span>
+                      </div>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
               )}
 
               {local.type === "MultiSelect" && (
@@ -4836,6 +5153,14 @@ function Inspector({
                       placeholder='["option1", "option2"]'
                       rows={2}
                     />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Switch 
+                      id="multiselect-disabled" 
+                      checked={local.props?.disabled === true} 
+                      onCheckedChange={(checked) => set("disabled", checked)} 
+                    />
+                    <label htmlFor="multiselect-disabled" className="text-xs">禁用</label>
                   </div>
                 </>
               )}
@@ -5025,6 +5350,135 @@ function Inspector({
                 <Switch 
                   checked={local.props?.showLine ?? true} 
                   onCheckedChange={(checked) => set("showLine", checked)} 
+                />
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        )}
+
+        {local.type === "DateRangePicker" && (
+          <AccordionItem value="daterangepicker-config">
+            <AccordionTrigger className="text-sm font-medium">
+              日期区间选择器配置
+            </AccordionTrigger>
+            <AccordionContent className="space-y-3">
+              <div className="grid gap-2">
+                <label className="text-xs">标签</label>
+                <Input 
+                  value={local.props?.label ?? ""} 
+                  onChange={(e) => set("label", e.target.value)} 
+                  placeholder="日期区间选择器"
+                />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-xs">样式变体</label>
+                <Select value={local.props?.variant ?? "default"} onValueChange={(value) => set("variant", value)}>
+                  <SelectTrigger className="h-8">
+                    <SelectValue placeholder="选择样式" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="default">默认样式</SelectItem>
+                    <SelectItem value="outline">边框样式</SelectItem>
+                    <SelectItem value="minimal">简约样式</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <label className="text-xs">显示区间类型选择器</label>
+                <div className="flex items-center space-x-2">
+                  <Switch 
+                    checked={local.props?.showRangeTypeSelector ?? true} 
+                    onCheckedChange={(checked) => set("showRangeTypeSelector", checked)} 
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    {local.props?.showRangeTypeSelector ?? true ? "显示" : "隐藏"}
+                  </span>
+                </div>
+              </div>
+              <div className="grid gap-2">
+                <label className="text-xs">默认区间类型</label>
+                <Select value={local.props?.rangeType ?? "day"} onValueChange={(value) => set("rangeType", value)}>
+                  <SelectTrigger className="h-8">
+                    <SelectValue placeholder="选择区间类型" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="day">日期区间</SelectItem>
+                    <SelectItem value="week">周区间</SelectItem>
+                    <SelectItem value="month">月区间</SelectItem>
+                    <SelectItem value="year">年区间</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {!(local.props?.showRangeTypeSelector ?? true) && (
+                <div className="text-xs text-muted-foreground p-2 bg-muted rounded">
+                  当隐藏区间类型选择器时，组件将固定使用上面设置的默认区间类型
+                </div>
+              )}
+              <div className="grid gap-2">
+                <label className="text-xs">日期格式</label>
+                <Select value={local.props?.format ?? ""} onValueChange={(value) => set("format", value === "custom" ? "" : value)}>
+                  <SelectTrigger className="h-8">
+                    <SelectValue placeholder="选择格式" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="yyyy年MM月dd日">中文格式 (2024年01月01日)</SelectItem>
+                    <SelectItem value="yyyy-MM-dd">标准格式 (2024-01-01)</SelectItem>
+                    <SelectItem value="MM/dd/yyyy">美式格式 (01/01/2024)</SelectItem>
+                    <SelectItem value="dd/MM/yyyy">欧式格式 (01/01/2024)</SelectItem>
+                    <SelectItem value="custom">自定义格式</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {(!local.props?.format || local.props?.format === "") && (
+                <div className="grid gap-2">
+                  <Input 
+                    value={local.props?.customFormat ?? ""} 
+                    onChange={(e) => set("format", e.target.value)} 
+                    placeholder="yyyy-MM-dd"
+                  />
+                  <div className="text-xs text-muted-foreground">
+                    使用 date-fns 格式化语法，留空使用默认格式
+                  </div>
+                </div>
+              )}
+              <div className="grid gap-2">
+                <label className="text-xs">占位符文本</label>
+                <Input 
+                  value={local.props?.placeholder ?? ""} 
+                  onChange={(e) => set("placeholder", e.target.value)} 
+                  placeholder="选择日期区间"
+                />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-xs">默认值 (JSON)</label>
+                <Textarea 
+                  value={JSON.stringify(local.props?.value ?? [], null, 2)} 
+                  onChange={(e) => {
+                    try {
+                      const value = JSON.parse(e.target.value);
+                      set("value", value);
+                    } catch (err) {
+                      // 忽略JSON解析错误
+                    }
+                  }} 
+                  placeholder='["2024-01-01", "2024-01-31"]'
+                  rows={2}
+                />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-xs">最小日期</label>
+                <Input 
+                  value={local.props?.min ?? ""} 
+                  onChange={(e) => set("min", e.target.value)} 
+                  placeholder="2020-01-01"
+                />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-xs">最大日期</label>
+                <Input 
+                  value={local.props?.max ?? ""} 
+                  onChange={(e) => set("max", e.target.value)} 
+                  placeholder="2030-12-31"
                 />
               </div>
             </AccordionContent>
@@ -5668,7 +6122,6 @@ export default function Studio() {
     
     // 数据组件
     Transfer: "fas fa-exchange-alt",
-    Upload: "fas fa-upload",
     Iframe: "fas fa-external-link-alt",
     Tree: "fas fa-sitemap",
     
@@ -5714,6 +6167,7 @@ export default function Studio() {
       { key: "Textarea", label: "多行输入" },
       { key: "RichTextEditor", label: "富文本编辑器" },
       { key: "DatePicker", label: "日期选择器" },
+      { key: "DateRangePicker", label: "日期区间选择器" },
       { key: "Switch", label: "开关" },
       { key: "Slider", label: "滑块" },
       { key: "Select", label: "选择器" },
@@ -5742,7 +6196,6 @@ export default function Studio() {
     ],
     "导航组件": [
       { key: "Tabs", label: "标签页" },
-      { key: "PageTab", label: "页面标签页" },
       { key: "Accordion", label: "手风琴" },
       { key: "Collapsible", label: "折叠面板" },
     ],

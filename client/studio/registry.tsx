@@ -25,6 +25,8 @@ import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerFooter, Dr
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EditableTable } from "@/components/ui/editable-table";
+import { DatePicker } from "@/components/ui/date-picker";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { Transfer } from "./components/ui/transfer";
 import { Upload } from "./components/ui/upload";
 import { Iframe } from "./components/ui/iframe";
@@ -2207,22 +2209,22 @@ export const registry: Record<string, Renderer> = {
             );
           }
         }}
-        onRowAdd={(newRow) => {
-          if (node.props?.events) {
-            (node.props.events as any[]).forEach((ev) => 
-              ev?.type === 'rowAdd' && ev?.handler && 
-              execHandler(ev.handler, { row: newRow })
-            );
-          }
-        }}
-        onRowDelete={(deletedRow) => {
-          if (node.props?.events) {
-            (node.props.events as any[]).forEach((ev) => 
-              ev?.type === 'rowDelete' && ev?.handler && 
-              execHandler(ev.handler, { row: deletedRow })
-            );
-          }
-        }}
+        // onRowAdd={(newRow) => {
+        //   if (node.props?.events) {
+        //     (node.props.events as any[]).forEach((ev) => 
+        //       ev?.type === 'rowAdd' && ev?.handler && 
+        //       execHandler(ev.handler, { row: newRow })
+        //     );
+        //   }
+        // }}
+        // onRowDelete={(deletedRow) => {
+        //   if (node.props?.events) {
+        //     (node.props.events as any[]).forEach((ev) => 
+        //       ev?.type === 'rowDelete' && ev?.handler && 
+        //       execHandler(ev.handler, { row: deletedRow })
+        //     );
+        //   }
+        // }}
         onCellChange={(rowIndex, columnKey, oldValue, newValue) => {
           if (node.props?.events) {
             (node.props.events as any[]).forEach((ev) => 
@@ -2525,20 +2527,159 @@ export const registry: Record<string, Renderer> = {
       );
     },
     DatePicker: (node, ctx) => {
-      const handleChange = (value: string) => {
-        execHandler(node.props?.onChange, { value, node, ctx });
+      // 获取数据绑定值
+      const getBoundValue = () => {
+        if (node.props?.fieldMapping && ctx?.gridData) {
+          const boundValue = ctx.gridData[node.props.fieldMapping];
+          return boundValue ? new Date(boundValue) : undefined;
+        }
+        const defaultValue = node.props?.defaultValue || node.props?.value;
+        if (defaultValue) {
+          const date = new Date(defaultValue);
+          return isNaN(date.getTime()) ? undefined : date;
+        }
+        return undefined;
+      };
+      
+      const [selectedDate, setSelectedDate] = useState<Date | undefined>(getBoundValue());
+      
+      // 当数据绑定变化时更新值
+      useEffect(() => {
+        const boundValue = getBoundValue();
+        if (boundValue?.getTime() !== selectedDate?.getTime()) {
+          setSelectedDate(boundValue);
+        }
+      }, [ctx?.gridData, node.props?.fieldMapping, node.props?.defaultValue, node.props?.value]);
+      
+      useEffect(() => {
+        // 注册表单验证字段
+        formValidationManager.registerField(node.id, 'value', node.props?.required || false, node.code);
+        const value = selectedDate && selectedDate instanceof Date ? selectedDate.toISOString().split('T')[0] : '';
+        formValidationManager.updateFieldValue(node.id, 'value', value);
+      }, [selectedDate, node.id, node.props?.required, node.code]);
+
+      const handleChange = (date: Date | undefined) => {
+        console.log('[DatePicker] handleChange called with:', date);
+        setSelectedDate(date);
+        const value = date && date instanceof Date ? date.toISOString().split('T')[0] : '';
+        
+        // 更新表单验证
+        formValidationManager.updateFieldValue(node.id, 'value', value);
+        
+        // 处理事件
+        if (node.props?.events) {
+          (node.props.events as any[]).forEach((event) => {
+            if (event.type === "onChange") {
+              console.log('[DatePicker] Executing onChange event with value:', value);
+              execHandler(event.handler, { value, date, ...event.params });
+            }
+          });
+        }
       };
 
       return (
-        <Input
-          type={node.props?.type || 'date'}
-          value={node.props?.value || ''}
-          min={node.props?.min}
-          max={node.props?.max}
-          disabled={node.props?.disabled}
-          onChange={(e) => handleChange(e.target.value)}
-          className={node.props?.className}
-        />
+        <FormLabel 
+          label={node.props?.label} 
+          required={node.props?.required}
+          className={node.props?.labelClassName}
+          nodeId={node.id}
+          fieldName="value"
+        >
+          <DatePicker
+            value={selectedDate}
+            onChange={handleChange}
+            placeholder={node.props?.placeholder || "选择日期"}
+            disabled={node.props?.disabled}
+            className={node.props?.className}
+          />
+        </FormLabel>
+      );
+    },
+    DateRangePicker: (node, ctx) => {
+      console.log('🏗️ [Registry] DateRangePicker component rendering with node:', node.id, 'props:', node.props);
+      
+      // 获取数据绑定值
+      const getBoundValue = () => {
+        if (node.props?.fieldMapping && ctx?.gridData) {
+          const boundValue = ctx.gridData[node.props.fieldMapping];
+          if (boundValue && Array.isArray(boundValue) && boundValue.length === 2) {
+            return { from: new Date(boundValue[0]), to: new Date(boundValue[1]) };
+          }
+        }
+        const defaultValue = node.props?.defaultValue || node.props?.value;
+        if (defaultValue && Array.isArray(defaultValue) && defaultValue.length === 2) {
+          return { from: new Date(defaultValue[0]), to: new Date(defaultValue[1]) };
+        }
+        return undefined;
+      };
+      
+      const [selectedRange, setSelectedRange] = useState<{ from: Date; to: Date } | undefined>(getBoundValue());
+      
+      // 当数据绑定变化时更新值
+      useEffect(() => {
+        const boundValue = getBoundValue();
+        if (boundValue && (!selectedRange || 
+            boundValue.from.getTime() !== selectedRange.from.getTime() || 
+            boundValue.to.getTime() !== selectedRange.to.getTime())) {
+          setSelectedRange(boundValue);
+        }
+      }, [ctx?.gridData, node.props?.fieldMapping, node.props?.defaultValue, node.props?.value]);
+      
+      useEffect(() => {
+        // 注册表单验证字段
+        formValidationManager.registerField(node.id, 'value', node.props?.required || false, node.code);
+        const value = selectedRange && selectedRange.from instanceof Date && selectedRange.to instanceof Date ? [
+          selectedRange.from.toISOString().split('T')[0],
+          selectedRange.to.toISOString().split('T')[0]
+        ] : [];
+        formValidationManager.updateFieldValue(node.id, 'value', value);
+      }, [selectedRange, node.id, node.props?.required, node.code]);
+
+      const handleChange = (range: { from: Date; to: Date } | undefined) => {
+        console.log('🔄 [Registry] DateRangePicker handleChange called with:', range);
+        console.log('🔄 [Registry] Previous selectedRange:', selectedRange);
+        setSelectedRange(range);
+        const value = range && range.from instanceof Date && range.to instanceof Date ? [
+          range.from.toISOString().split('T')[0],
+          range.to.toISOString().split('T')[0]
+        ] : [];
+        
+        // 更新表单验证
+        formValidationManager.updateFieldValue(node.id, 'value', value);
+        
+        // 处理事件
+        if (node.props?.events) {
+          (node.props.events as any[]).forEach((event) => {
+            if (event.type === "onChange") {
+              console.log('[DateRangePicker] Executing onChange event with value:', value);
+              execHandler(event.handler, { value, range, ...event.params });
+            }
+          });
+        }
+      };
+
+      console.log('🎨 [Registry] Rendering DateRangePicker with selectedRange:', selectedRange, 'rangeType:', node.props?.rangeType || "day");
+      
+      return (
+        <FormLabel 
+          label={node.props?.label} 
+          required={node.props?.required}
+          className={node.props?.labelClassName}
+          nodeId={node.id}
+          fieldName="value"
+        >
+          <DateRangePicker
+            value={selectedRange}
+            onChange={handleChange}
+            placeholder={node.props?.placeholder || "选择日期区间"}
+            disabled={node.props?.disabled}
+            className={node.props?.className}
+            // variant={node.props?.variant || "default"}
+            rangeType={node.props?.rangeType || "day"}
+            showRangeTypeSelector={node.props?.showRangeTypeSelector ?? true}
+            format={node.props?.format}
+          />
+        </FormLabel>
       );
     },
     MultiSelect: (node, ctx) => {
