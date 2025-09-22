@@ -22,6 +22,22 @@ interface DateRangePickerProps {
   rangeType?: DateRangeType;
   showRangeTypeSelector?: boolean;
   format?: string;
+  // 高级设置
+  showPresets?: boolean;
+  customPresets?: Array<{label: string; value: string}>;
+  enableTime?: boolean;
+  timeFormat?: "12" | "24";
+  disabledDates?: "none" | "weekends" | "weekdays" | "past" | "future" | "custom";
+  customDisabledDates?: string[];
+  locale?: string;
+  weekStartsOn?: 0 | 1 | 2 | 3 | 4 | 5 | 6;
+  strictValidation?: boolean;
+  maxRangeDays?: number;
+  primaryColor?: string;
+  enableAnimations?: boolean;
+  autoClose?: boolean;
+  min?: string;
+  max?: string;
 }
 
 export function DateRangePicker({
@@ -32,7 +48,23 @@ export function DateRangePicker({
   className,
   rangeType = "day",
   showRangeTypeSelector = true,
-  format: dateFormat = "yyyy年MM月dd日"
+  format: dateFormat = "yyyy年MM月dd日",
+  // 高级设置
+  showPresets = true,
+  customPresets = [],
+  enableTime = false,
+  timeFormat = "24",
+  disabledDates = "none",
+  customDisabledDates = [],
+  locale = "zh-CN",
+  weekStartsOn = 1,
+  strictValidation = false,
+  maxRangeDays,
+  primaryColor,
+  enableAnimations = true,
+  autoClose = true,
+  min,
+  max
 }: DateRangePickerProps) {
   const [isOpen, setIsOpen] = React.useState(false);
   const [currentDate, setCurrentDate] = React.useState(new Date());
@@ -66,12 +98,98 @@ export function DateRangePicker({
     setSelectedRange(normalizeValue(value));
   }, [value]);
 
+  // 日期禁用逻辑
+  const isDateDisabled = (date: Date) => {
+    // 检查最小最大日期
+    if (min && date < new Date(min)) return true;
+    if (max && date > new Date(max)) return true;
+
+    switch (disabledDates) {
+      case "weekends":
+        return date.getDay() === 0 || date.getDay() === 6;
+      case "weekdays":
+        return date.getDay() >= 1 && date.getDay() <= 5;
+      case "past":
+        return date < new Date(new Date().setHours(0, 0, 0, 0));
+      case "future":
+        return date > new Date(new Date().setHours(23, 59, 59, 999));
+      case "custom":
+        return customDisabledDates.some(disabledDate => 
+          date.toISOString().split('T')[0] === disabledDate
+        );
+      default:
+        return false;
+    }
+  };
+
+  // 预设处理
+  const getPresetRange = (presetValue: string): DateRange | null => {
+    const today = new Date();
+    const startOfToday = new Date(today.setHours(0, 0, 0, 0));
+    
+    switch (presetValue) {
+      case "last7days":
+        return {
+          from: addDays(startOfToday, -6),
+          to: startOfToday
+        };
+      case "last30days":
+        return {
+          from: addDays(startOfToday, -29),
+          to: startOfToday
+        };
+      case "thisMonth":
+        return {
+          from: startOfMonth(startOfToday),
+          to: endOfMonth(startOfToday)
+        };
+      case "lastMonth":
+        const lastMonth = addDays(startOfMonth(startOfToday), -1);
+        return {
+          from: startOfMonth(lastMonth),
+          to: endOfMonth(lastMonth)
+        };
+      case "thisYear":
+        return {
+          from: startOfYear(startOfToday),
+          to: endOfYear(startOfToday)
+        };
+      case "lastYear":
+        const lastYear = new Date(startOfToday.getFullYear() - 1, 0, 1);
+        return {
+          from: startOfYear(lastYear),
+          to: endOfYear(lastYear)
+        };
+      default:
+        return null;
+    }
+  };
+
+  // 范围验证
+  const validateRange = (range: DateRange): boolean => {
+    if (!strictValidation) return true;
+    
+    if (maxRangeDays) {
+      const diffTime = Math.abs(range.to.getTime() - range.from.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return diffDays <= maxRangeDays;
+    }
+    
+    return true;
+  };
+
   const handleDateSelect = (date: Date) => {
     console.log("🔥 handleDateSelect 被调用");
     console.log("📅 点击的日期:", date.toDateString());
     console.log("🎯 当前范围类型:", currentRangeType);
     console.log("🔄 selectingStart 状态:", selectingStart);
     console.log("📊 当前选中范围:", selectedRange);
+    
+    // 检查日期是否被禁用
+    if (isDateDisabled(date)) {
+      console.log("❌ 日期被禁用，忽略点击");
+      return;
+    }
     
     if (currentRangeType === "day") {
       console.log("📅 日期模式选择");
@@ -80,30 +198,44 @@ export function DateRangePicker({
         // 第一次点击：选择单日
         const newRange = { from: date, to: date };
         console.log("📝 新范围:", newRange);
-        setSelectedRange(newRange);
-        onChange?.(newRange);
-        setSelectingStart(false);
-        console.log("🔄 设置 selectingStart 为 false");
-      } else {
-        console.log("✅ 第二次点击逻辑");
-        // 第二次点击：如果点击同一天，确认选择并关闭；否则选择区间
-        if (date.getTime() === selectedRange.from.getTime()) {
-          console.log("🎯 点击同一天，确认选择");
-          setIsOpen(false);
-          setSelectingStart(true);
-        } else {
-          console.log("📝 选择不同日期，创建区间");
-          const newRange = {
-            from: date < selectedRange.from ? date : selectedRange.from,
-            to: date > selectedRange.from ? date : selectedRange.from
-          };
-          console.log("📝 新区间:", newRange);
+        
+        if (validateRange(newRange)) {
           setSelectedRange(newRange);
           onChange?.(newRange);
-          setIsOpen(false);
-          setSelectingStart(true);
+          setSelectingStart(false);
+          console.log("🔄 设置 selectingStart 为 false");
+        } else {
+          console.log("❌ 范围验证失败");
         }
-      }
+      } else {
+          console.log("✅ 第二次点击逻辑");
+          // 第二次点击：如果点击同一天，确认选择并关闭；否则选择区间
+          if (date.getTime() === selectedRange.from.getTime()) {
+            console.log("🎯 点击同一天，确认选择");
+            if (autoClose) {
+              setIsOpen(false);
+            }
+            setSelectingStart(true);
+          } else {
+            console.log("📝 选择不同日期，创建区间");
+            const newRange = {
+              from: date < selectedRange.from ? date : selectedRange.from,
+              to: date > selectedRange.from ? date : selectedRange.from
+            };
+            console.log("📝 新区间:", newRange);
+            
+            if (validateRange(newRange)) {
+              setSelectedRange(newRange);
+              onChange?.(newRange);
+              if (autoClose) {
+                setIsOpen(false);
+              }
+              setSelectingStart(true);
+            } else {
+              console.log("❌ 范围验证失败");
+            }
+          }
+        }
     } else {
       // 对于周/月/年模式，支持跨区间选择
       if (selectingStart || !selectedRange) {
@@ -129,8 +261,13 @@ export function DateRangePicker({
         }
         
         const newRange = { from, to };
-        setSelectedRange(newRange);
-        setSelectingStart(false);
+        
+        if (validateRange(newRange)) {
+          setSelectedRange(newRange);
+          setSelectingStart(false);
+        } else {
+          console.log("❌ 范围验证失败");
+        }
       } else {
         // 选择结束区间，支持跨多个区间
         let clickedFrom: Date, clickedTo: Date;
@@ -158,10 +295,17 @@ export function DateRangePicker({
         const finalTo = clickedTo > selectedRange.to ? clickedTo : selectedRange.to;
         
         const newRange = { from: finalFrom, to: finalTo };
-        setSelectedRange(newRange);
-        onChange?.(newRange);
-        setIsOpen(false);
-        setSelectingStart(true);
+        
+        if (validateRange(newRange)) {
+          setSelectedRange(newRange);
+          onChange?.(newRange);
+          if (autoClose) {
+            setIsOpen(false);
+          }
+          setSelectingStart(true);
+        } else {
+          console.log("❌ 范围验证失败");
+        }
       }
     }
   };
@@ -334,6 +478,106 @@ export function DateRangePicker({
         </div>
       )}
 
+      {/* 快捷预设 */}
+      {showPresets && (
+        <div className="mb-4">
+          <div className="text-xs text-muted-foreground mb-2">快捷选择</div>
+          <div className="grid grid-cols-2 gap-2">
+            {/* 默认预设 */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const range = getPresetRange("last7days");
+                if (range && validateRange(range)) {
+                  setSelectedRange(range);
+                  onChange?.(range);
+                  if (autoClose) {
+                    setIsOpen(false);
+                  }
+                }
+              }}
+              className="text-xs h-8"
+            >
+              最近7天
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const range = getPresetRange("last30days");
+                if (range && validateRange(range)) {
+                  setSelectedRange(range);
+                  onChange?.(range);
+                  if (autoClose) {
+                    setIsOpen(false);
+                  }
+                }
+              }}
+              className="text-xs h-8"
+            >
+              最近30天
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const range = getPresetRange("thisMonth");
+                if (range && validateRange(range)) {
+                  setSelectedRange(range);
+                  onChange?.(range);
+                  if (autoClose) {
+                    setIsOpen(false);
+                  }
+                }
+              }}
+              className="text-xs h-8"
+            >
+              本月
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const range = getPresetRange("lastMonth");
+                if (range && validateRange(range)) {
+                  setSelectedRange(range);
+                  onChange?.(range);
+                  if (autoClose) {
+                    setIsOpen(false);
+                  }
+                }
+              }}
+              className="text-xs h-8"
+            >
+              上月
+            </Button>
+            
+            {/* 自定义预设 */}
+            {customPresets.map((preset, index) => (
+              <Button
+                key={index}
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const range = getPresetRange(preset.value);
+                  if (range && validateRange(range)) {
+                    setSelectedRange(range);
+                    onChange?.(range);
+                    if (autoClose) {
+                      setIsOpen(false);
+                    }
+                  }
+                }}
+                className="text-xs h-8"
+              >
+                {preset.label}
+              </Button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* 头部导航 */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center space-x-2">
@@ -400,6 +644,7 @@ export function DateRangePicker({
             <Button
               key={index}
               variant="ghost"
+              disabled={isDateDisabled(dayObj.date)}
               className={cn(
                 "h-9 w-9 p-0 text-sm font-normal relative flex items-center justify-center transition-all duration-150",
                 !dayObj.isCurrentMonth && "text-muted-foreground opacity-50",
@@ -407,11 +652,12 @@ export function DateRangePicker({
                 isInCurrentRange && "bg-primary/20 text-primary",
                 isInCurrentPreview && !isInCurrentRange && "bg-muted",
                 (isStart || isEnd) && "bg-primary text-primary-foreground",
-                "cursor-pointer",
-                "hover:bg-primary/10 hover:text-primary hover:scale-105",
-                !dayObj.isCurrentMonth && "hover:bg-muted/50"
+                isDateDisabled(dayObj.date) && "opacity-50 cursor-not-allowed",
+                !isDateDisabled(dayObj.date) && "cursor-pointer",
+                !isDateDisabled(dayObj.date) && "hover:bg-primary/10 hover:text-primary hover:scale-105",
+                !dayObj.isCurrentMonth && !isDateDisabled(dayObj.date) && "hover:bg-muted/50"
               )}
-              onMouseDown={() => handleDateSelect(dayObj.date)}
+              onMouseDown={() => !isDateDisabled(dayObj.date) && handleDateSelect(dayObj.date)}
               onMouseEnter={() => setHoveredDate(dayObj.date)}
               onMouseLeave={() => setHoveredDate(null)}
             >
@@ -471,9 +717,15 @@ export function DateRangePicker({
                 range = { from: today, to: today };
             }
             
-            setSelectedRange(range);
-            onChange?.(range);
-            setIsOpen(false);
+            if (validateRange(range)) {
+              setSelectedRange(range);
+              onChange?.(range);
+              if (autoClose) {
+                setIsOpen(false);
+              }
+            } else {
+              console.log("❌ 范围验证失败");
+            }
           }}
           className="text-xs"
         >

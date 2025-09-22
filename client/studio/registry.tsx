@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -42,6 +43,7 @@ import {
   X, Heart, Star, Download, Upload as UploadIcon, RefreshCw, Copy, Share, 
   Info, AlertTriangle, XCircle, CheckCircle, Loader2
 } from "lucide-react";
+import ThemeSwitcher from "@/components/site/ThemeSwitcher";
 import { cn } from "@/lib/utils";
 import { bus } from "@/lib/eventBus";
 import { execHandler } from "@/lib/handlers";
@@ -2591,6 +2593,7 @@ export const registry: Record<string, Renderer> = {
             placeholder={node.props?.placeholder || "选择日期"}
             disabled={node.props?.disabled}
             className={node.props?.className}
+            format={node.props?.format}
           />
         </FormLabel>
       );
@@ -2799,6 +2802,181 @@ export const registry: Record<string, Renderer> = {
           onLoad={handleLoad}
           onError={handleError}
         />
+      );
+    },
+    Header: (node, ctx) => {
+      // 智能导航处理
+      let navigate: any = null;
+      let location: any = null;
+      let isInRouter = false;
+      
+      try {
+        navigate = useNavigate();
+        location = useLocation();
+        isInRouter = true;
+      } catch (error) {
+        // 不在Router上下文中
+        isInRouter = false;
+      }
+      
+      // 解析导航项
+      const navItems = node.props?.navItems ? 
+        (typeof node.props.navItems === 'string' ? 
+          JSON.parse(node.props.navItems) : 
+          node.props.navItems) : 
+        [
+          { to: "/", label: "首页" },
+          { to: "/guide", label: "指南" },
+          { to: "/studio", label: "设计" },
+          { to: "/test1", label: "技术栈" },
+          { to: "/test2", label: "设计系统" },
+        ];
+
+      const handleNavClick = (item: any) => {
+        if (!item.to) {
+          // 执行自定义事件处理器
+          execHandler(node.props?.onNavClick, { node, ctx, item });
+          return;
+        }
+
+        try {
+          if (isInRouter && navigate) {
+            // 在Router上下文中，使用SPA导航
+            navigate(item.to);
+          } else {
+            // 不在Router上下文中，尝试智能导航
+            const currentOrigin = window.location.origin;
+            const targetUrl = new URL(item.to, currentOrigin);
+            
+            if (targetUrl.origin === currentOrigin) {
+              // 同域名下，检查是否存在React Router实例
+              const hasReactRouter = !!(window as any).__reactRouter || 
+                                   document.querySelector('[data-reactroot]') ||
+                                   document.querySelector('#root [data-reactrouter]') ||
+                                   // 检查是否有Router相关的DOM标记
+                                   !!document.querySelector('div[class*="router"]') ||
+                                   // 检查全局变量
+                                   !!(window as any).React;
+              
+              if (hasReactRouter) {
+                // 尝试使用自定义事件通知主应用进行导航
+                const navigationEvent = new CustomEvent('spa-navigate', {
+                  detail: { to: item.to, from: window.location.pathname }
+                });
+                window.dispatchEvent(navigationEvent);
+                
+                // 等待一小段时间看是否有响应
+                setTimeout(() => {
+                  if (window.location.pathname !== item.to) {
+                    // 如果没有响应，使用History API + 页面刷新
+                    window.history.pushState(null, '', item.to);
+                    window.location.reload();
+                  }
+                }, 50);
+              } else {
+                // 没有React Router，直接跳转
+                window.location.href = item.to;
+              }
+            } else {
+              // 跨域跳转，使用location.href
+              window.location.href = item.to;
+            }
+          }
+        } catch (error) {
+          console.warn('导航失败，使用降级方案:', error);
+          // 最终降级方案
+          window.location.href = item.to;
+        }
+        
+        // 执行自定义事件处理器
+        execHandler(node.props?.onNavClick, { node, ctx, item });
+      };
+
+      const handleLogoClick = () => {
+        execHandler(node.props?.onLogoClick, { node, ctx });
+      };
+
+      return (
+        <header className={cn(
+          "sticky top-0 z-30 w-full border-b bg-background/70 backdrop-blur supports-[backdrop-filter]:bg-background/50",
+          node.props?.sticky === false && "relative",
+          node.props?.className
+        )}>
+          <div className={cn(
+            "container mx-auto flex items-center justify-between px-4",
+            `h-${node.props?.height || 16}`
+          )}>
+            {/* Logo 区域 */}
+            <div 
+              className="flex items-center gap-2 cursor-pointer"
+              onClick={handleLogoClick}
+            >
+              {node.props?.showLogo !== false && (
+                <span 
+                  className={cn(
+                    "inline-block rounded",
+                    `h-${node.props?.logoSize || 6}`,
+                    `w-${node.props?.logoSize || 6}`
+                  )}
+                  style={{ 
+                    background: node.props?.logoColor || `hsl(var(--primary))` 
+                  }} 
+                />
+              )}
+              {node.props?.showTitle !== false && (
+                <span className={cn(
+                  "font-extrabold text-foreground",
+                  `text-${node.props?.titleSize || 'xl'}`
+                )}>
+                  {node.props?.title || "代码优化建议"}
+                </span>
+              )}
+            </div>
+
+            {/* 右侧区域 */}
+            <div className="flex items-center gap-3">
+              {/* 导航菜单 */}
+              {node.props?.showNav !== false && (
+                <nav className={cn(
+                  "items-center gap-1",
+                  node.props?.navLayout === 'vertical' ? 'flex flex-col' : 'hidden sm:flex'
+                )}>
+                  {navItems.map((item: any, index: number) => (
+                    <button
+                      key={index}
+                      onClick={() => handleNavClick(item)}
+                      className={cn(
+                        "rounded-md px-3 py-2 text-sm font-medium text-foreground/70 transition-colors hover:bg-accent hover:text-foreground",
+                        node.props?.activeNav === item.to && "text-foreground"
+                      )}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </nav>
+              )}
+
+              {/* 主题切换器 */}
+              {node.props?.showThemeSwitcher !== false && (
+                <ThemeSwitcher />
+              )}
+
+              {/* 自定义按钮 */}
+              {node.props?.showCustomButton && (
+                <Button
+                  variant={node.props?.customButtonVariant || "outline"}
+                  size={node.props?.customButtonSize || "sm"}
+                  onClick={() => execHandler(node.props?.onCustomButtonClick, { node, ctx })}
+                >
+                  {node.props?.customButtonIcon && (
+                    <i className={`${node.props.customButtonIcon} mr-2`} />
+                  )}
+                  {node.props?.customButtonText || "按钮"}
+                </Button>
+              )}
+            </div>
+          </div>
+        </header>
       );
     },
 };

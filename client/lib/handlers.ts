@@ -47,6 +47,63 @@ const handlers: Record<string, NamedHandler> = {
     if (!params?.id) return;
     ctx.setText(params.id, params?.text ?? "");
   },
+  navigate: (params, ctx) => {
+    const { pageId, pageName, url, target = '_self', replace = false, type = 'internal' } = params;
+    
+    if (type === 'external' && url) {
+      // 外部URL导航
+      if (target === '_blank') {
+        window.open(url, '_blank');
+      } else {
+        if (replace) {
+          window.location.replace(url);
+        } else {
+          window.location.href = url;
+        }
+      }
+    } else if (pageId || pageName) {
+      // 内部页面导航
+      const targetPage = pageId || pageName;
+      
+      // 发布页面导航事件
+      ctx.publish('page.navigate', {
+        pageId: targetPage,
+        pageName,
+        timestamp: Date.now()
+      });
+      
+      // 检查是否在Studio环境中
+      if (window.location.pathname.includes('/studio')) {
+        // 在Studio中，更新URL参数
+        const currentUrl = new URL(window.location.href);
+        currentUrl.searchParams.set('page', targetPage);
+        if (replace) {
+          window.history.replaceState({}, '', currentUrl.toString());
+        } else {
+          window.history.pushState({}, '', currentUrl.toString());
+        }
+        // 触发页面更新
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      } else {
+        // 在其他环境中，导航到预览页面
+        const targetUrl = `/preview/${encodeURIComponent(targetPage)}`;
+        
+        // 使用SPA导航，避免页面刷新
+        if (replace) {
+          window.history.replaceState({}, '', targetUrl);
+        } else {
+          window.history.pushState({}, '', targetUrl);
+        }
+        
+        // 触发自定义导航事件，让React Router处理
+        window.dispatchEvent(new CustomEvent('spa-navigate', {
+          detail: { to: targetUrl }
+        }));
+      }
+    } else {
+      console.warn('navigate handler: 需要提供 pageId、pageName 或 url 参数');
+    }
+  },
   resolvefetch: async (params, ctx) => {
     const { id, code, type = 'form', script, sendFormData = false, returnFormData = false, getFormData = false } = params;
     

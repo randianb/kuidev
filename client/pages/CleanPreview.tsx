@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
 import { NodeRenderer } from "@/studio/registry";
 import { bus } from "@/lib/eventBus";
 import { execHandler } from "@/lib/handlers";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { PageMeta } from "@/studio/types";
+import { PageMeta, getPageRoots } from "@/studio/types";
 
 // 自定义预览弹框组件，解决样式问题
 function PreviewDialog({ open, onOpenChange, title, content }: {
@@ -53,49 +54,100 @@ interface RuntimePreviewProps {
 }
 
 export default function RuntimePreview({ pageData, pageId }: RuntimePreviewProps) {
+  const params = useParams();
   const [page, setPage] = useState<PageMeta | null>(pageData || null);
   const [open, setOpen] = useState(false);
   const [dlg, setDlg] = useState<{ title?: string; content?: any } | null>(null);
   const [formData, setFormData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [initialLoading, setInitialLoading] = useState(true);
 
-  // 从URL参数或localStorage获取页面数据
+  // 从路由参数、URL参数或localStorage获取页面数据
   useEffect(() => {
     if (!pageData && !page) {
-      // 尝试从URL参数获取页面ID
+      setInitialLoading(true);
+      
+      // 优先从路由参数获取页面ID
+      const routePageId = params.id;
+      // 备用：从URL查询参数获取页面ID
       const urlParams = new URLSearchParams(window.location.search);
-      const urlPageId = pageId || urlParams.get('id');
+      const urlPageId = pageId || routePageId || urlParams.get('id');
       
       if (urlPageId) {
         // 尝试从localStorage获取页面数据
         try {
-          const storedPages = localStorage.getItem('pages');
+          const storedPages = localStorage.getItem('studio.pages');
           if (storedPages) {
             const pages = JSON.parse(storedPages);
             const foundPage = pages.find((p: PageMeta) => p.id === urlPageId);
             if (foundPage) {
               setPage(foundPage);
+              setInitialLoading(false);
+              return;
             }
           }
         } catch (err) {
           console.error('获取页面数据失败:', err);
         }
+        
+        // 如果localStorage中没有找到，直接关闭加载状态
+        setInitialLoading(false);
+      } else {
+        setInitialLoading(false);
       }
       
       // 尝试从全局变量获取页面数据（如果有的话）
       if (!page && (window as any).pageData) {
         setPage((window as any).pageData);
+        setInitialLoading(false);
       }
+    } else {
+      setInitialLoading(false);
     }
   }, [pageData, pageId, page]);
 
   useEffect(() => {
-    const unsub = bus.subscribe("dialog.open", (payload: any) => {
+    const unsubDialog = bus.subscribe("dialog.open", (payload: any) => {
       setDlg(payload || {});
       setOpen(true);
     });
-    return () => unsub();
+
+    // 监听页面导航事件
+    const unsubNavigate = bus.subscribe("page.navigate", (payload: any) => {
+      if (payload?.pageId) {
+        setInitialLoading(true);
+        setPage(null);
+        setError(null);
+        
+        // 尝试从localStorage获取新页面数据
+        try {
+          const storedPages = localStorage.getItem('studio.pages');
+          if (storedPages) {
+            const pages = JSON.parse(storedPages);
+            const foundPage = pages.find((p: PageMeta) => p.id === payload.pageId);
+            if (foundPage) {
+              setPage(foundPage);
+              setInitialLoading(false);
+            } else {
+              // 如果没找到页面，直接关闭加载状态
+              setInitialLoading(false);
+            }
+          } else {
+            // 如果没有存储的页面数据，直接关闭加载状态
+            setInitialLoading(false);
+          }
+        } catch (err) {
+          console.error('导航时获取页面数据失败:', err);
+          setInitialLoading(false);
+        }
+      }
+    });
+
+    return () => {
+      unsubDialog();
+      unsubNavigate();
+    };
   }, []);
 
   // 处理弹框关闭
@@ -108,7 +160,8 @@ export default function RuntimePreview({ pageData, pageId }: RuntimePreviewProps
 
   useEffect(() => {
     // 如果页面有ID或编码，自动获取表单数据
-    if (page && (page.id || page.root?.code)) {
+    // 但只在页面首次加载时执行，避免导航时重复执行
+    if (page && (page.id || page.root?.code) && !initialLoading) {
       setLoading(true);
       setError(null);
       
@@ -124,7 +177,7 @@ export default function RuntimePreview({ pageData, pageId }: RuntimePreviewProps
         setLoading(false);
       }
     }
-  }, [page?.id, page?.root?.code]);
+  }, [page?.id, page?.root?.code, initialLoading]);
 
   useEffect(() => {
     // 监听数据解析事件
@@ -142,6 +195,22 @@ export default function RuntimePreview({ pageData, pageId }: RuntimePreviewProps
     return () => unsub();
   }, [page?.id, page?.root?.code]);
 
+  // 显示初始加载状态
+  if (initialLoading) {
+    return (
+      <div className="h-screen w-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <div className="text-lg font-medium mb-2">加载中...</div>
+          <div className="text-sm text-gray-500">
+            正在获取页面数据
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 显示页面不存在错误
   if (!page) {
     return (
       <div className="h-screen w-screen flex items-center justify-center">
@@ -155,10 +224,14 @@ export default function RuntimePreview({ pageData, pageId }: RuntimePreviewProps
     );
   }
 
+  const roots = getPageRoots(page);
+  
   return (
     <div className="h-screen w-screen">
       <div className="h-full w-full">
-        <NodeRenderer node={page.root} ctx={{}} />
+        {roots.map((root) => (
+          <NodeRenderer key={root.id} node={root} ctx={{}} />
+        ))}
       </div>
       <PreviewDialog 
         open={open} 

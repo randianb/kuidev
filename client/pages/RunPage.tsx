@@ -5,6 +5,7 @@ import { NodeRenderer } from "@/studio/registry";
 import { bus } from "@/lib/eventBus";
 import { execHandler } from "@/lib/handlers";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { PageMeta, getPageRoots } from "@/studio/types";
 
 export default function RunPage() {
   const { id } = useParams();
@@ -61,11 +62,15 @@ export default function RunPage() {
 
   if (!page) return <div className="h-full p-6">页面不存在</div>;
 
+  const roots = getPageRoots(page);
+
   return (
     <div className="h-full p-6 flex flex-col">
       <div className="mb-3 text-sm text-muted-foreground">运行态 · {page.name}</div>
       <div className="flex-1 min-h-0 overflow-auto">
-        <NodeRenderer node={page.root} ctx={{}} />
+        {roots.map((root) => (
+          <NodeRenderer key={root.id} node={root} ctx={{}} />
+        ))}
       </div>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>

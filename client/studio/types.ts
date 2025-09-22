@@ -45,6 +45,7 @@ export type ComponentType =
   | "Tabs"
   | "Command"
   | "Select"
+  | "Header"
   | "HoverCard"
   | "Drawer"
   | "Sheet"
@@ -99,7 +100,18 @@ export interface PageMeta {
   name: string;
   description?: string;
   template: TemplateKind;
-  root: NodeMeta; // root container
+  root: NodeMeta; // root container (向后兼容)
+  roots?: NodeMeta[]; // 多个根节点支持
+  groupId?: string; // 所属分组ID
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface PageGroup {
+  id: string;
+  name: string;
+  description?: string;
+  color?: string; // 分组颜色
   createdAt: number;
   updatedAt: number;
 }
@@ -138,6 +150,44 @@ export function createNode(type: ComponentType, partial?: Partial<NodeMeta>): No
   };
   
   return baseNode;
+}
+
+// 获取页面的所有根节点
+export function getPageRoots(page: PageMeta): NodeMeta[] {
+  return page.roots || [page.root];
+}
+
+// 设置页面的根节点
+export function setPageRoots(page: PageMeta, roots: NodeMeta[]): PageMeta {
+  if (roots.length === 1) {
+    // 单个根节点时，同时设置root和roots以保持兼容性
+    return { ...page, root: roots[0], roots: roots };
+  } else {
+    // 多个根节点时，创建一个虚拟容器作为root以保持兼容性
+    const virtualRoot = createNode("Container", {
+      props: { title: "页面容器", className: "min-h-screen" },
+      children: roots
+    });
+    return { ...page, root: virtualRoot, roots: roots };
+  }
+}
+
+// 添加根节点
+export function addPageRoot(page: PageMeta, root: NodeMeta): PageMeta {
+  const currentRoots = getPageRoots(page);
+  return setPageRoots(page, [...currentRoots, root]);
+}
+
+// 移除根节点
+export function removePageRoot(page: PageMeta, rootId: string): PageMeta {
+  const currentRoots = getPageRoots(page);
+  const filteredRoots = currentRoots.filter(root => root.id !== rootId);
+  if (filteredRoots.length === 0) {
+    // 至少保留一个空的容器
+    const emptyRoot = createNode("Container", { props: { title: "空页面" } });
+    return setPageRoots(page, [emptyRoot]);
+  }
+  return setPageRoots(page, filteredRoots);
 }
 
 export function createPage(name: string, template: TemplateKind): PageMeta {

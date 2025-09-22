@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
-import { createNode, createPage, NodeMeta, PageMeta, TemplateKind, CustomComponent } from "@/studio/types";
-import { getPage, loadPages, upsertPage, upsertCustomComponent, loadCustomComponents, deleteCustomComponent as deleteCustomComponentFromStorage } from "@/studio/storage";
+import { useEffect, useMemo, useState, useCallback } from "react";
+import { createNode, createPage, NodeMeta, PageMeta, PageGroup, TemplateKind, CustomComponent, getPageRoots, setPageRoots, addPageRoot, removePageRoot } from "@/studio/types";
+import { getPage, loadPages, upsertPage, upsertCustomComponent, loadCustomComponents, deleteCustomComponent as deleteCustomComponentFromStorage, loadPageGroups, savePageGroups, upsertPageGroup, deletePageGroup } from "@/studio/storage";
+import { getCachedPage, getCachedPages, upsertCachedPage, deleteCachedPage, initializePageCache, smartPreloadPages } from "@/studio/page-cache";
 import { NodeRenderer } from "@/studio/registry";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
@@ -12,16 +13,43 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import CommandK from "@/components/site/CommandK";
 import { getHandlers } from "@/lib/handlers";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
-import { bus } from "@/lib/eventBus";
+import { bus, EVENT_TOPICS, NavigateToPageEvent } from "@/lib/eventBus";
 import { eventHandlerManager } from "@/lib/event-handler-manager";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Switch } from "@/components/ui/switch";
-import { ChevronUp, ChevronDown, Edit, X, Copy, Code, FileText, Square, ExternalLink } from "lucide-react";
+import { ChevronUp, ChevronDown, Edit, X, Copy, Code, FileText, Square, ExternalLink, List, TreePine } from "lucide-react";
+import { PageTreeView } from "@/components/PageTreeView";
 import Editor from "@monaco-editor/react";
 import { generateUUID } from "@/lib/utils";
 import { getSpacingClasses } from "@/studio/utils/spacing";
 import { migratePageSpacing } from "@/studio/utils/migration";
+
+// 多根节点渲染组件
+function MultiRootRenderer({ 
+  page, 
+  ctx 
+}: { 
+  page: PageMeta; 
+  ctx: any; 
+}) {
+  const roots = getPageRoots(page);
+  
+  return (
+    <div className="space-y-4">
+      {roots.map((root, index) => (
+        <div key={root.id} className="relative">
+          {roots.length > 1 && (
+            <div className="absolute -top-2 -left-2 z-10 bg-blue-500 text-white text-xs px-2 py-1 rounded">
+              根节点 {index + 1}
+            </div>
+          )}
+          <NodeRenderer node={root} ctx={ctx} />
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function Canvas({
   page,
@@ -89,8 +117,8 @@ function Canvas({
 
   return (
     <div className="h-full overflow-y-auto overflow-x-hidden p-4">
-      <NodeRenderer
-        node={page.root}
+      <MultiRootRenderer
+        page={page}
         ctx={{
           design: true,
           onSelect: setSelect,
@@ -222,7 +250,7 @@ function SplitPreview({
           <div className="mx-auto h-full w-full max-w-full rounded border bg-background shadow-sm flex flex-col" style={{ width, overflow: "hidden" }}>
             <div className="border-b p-2 text-xs text-muted-foreground">预览</div>
             <div className="flex-1 overflow-auto p-3">
-              <NodeRenderer node={page.root} ctx={{ onPanelSizeChange }} />
+              <MultiRootRenderer page={page} ctx={{ onPanelSizeChange }} />
             </div>
           </div>
           <Dialog open={open} onOpenChange={setOpen}>
@@ -2233,6 +2261,141 @@ function EventsPanel({
                 </div>
               </div>
             )}
+
+            {/* 导航处理器参数配置 */}
+            {ev.handler === 'navigate' && (
+              <div className="space-y-3 p-3 border rounded-lg bg-gray-50">
+                <div className="text-sm font-medium text-gray-700">导航参数配置</div>
+                
+                {/* 导航类型选择 */}
+                <div>
+                  <label className="text-xs text-muted-foreground">导航类型</label>
+                  <Select
+                    value={ev.handlerParams?.type || 'internal'}
+                    onValueChange={(value) => {
+                      const next = [...events];
+                      const handlerParams = next[idx].handlerParams || {};
+                      next[idx] = { 
+                        ...next[idx], 
+                        handlerParams: { ...handlerParams, type: value } 
+                      };
+                      set("events", next);
+                    }}
+                  >
+                    <SelectTrigger className="h-8">
+                      <SelectValue placeholder="选择导航类型" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="internal">内部页面导航</SelectItem>
+                      <SelectItem value="external">外部URL导航</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* 内部页面导航配置 */}
+                {ev.handlerParams?.type !== 'external' && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-xs text-muted-foreground">页面ID</label>
+                      <Input
+                        placeholder="page-id"
+                        value={ev.handlerParams?.pageId || ''}
+                        onChange={(e) => {
+                          const next = [...events];
+                          const handlerParams = next[idx].handlerParams || {};
+                          next[idx] = { 
+                            ...next[idx], 
+                            handlerParams: { ...handlerParams, pageId: e.target.value } 
+                          };
+                          set("events", next);
+                        }}
+                        className="h-8"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground">页面名称</label>
+                      <Input
+                        placeholder="页面名称"
+                        value={ev.handlerParams?.pageName || ''}
+                        onChange={(e) => {
+                          const next = [...events];
+                          const handlerParams = next[idx].handlerParams || {};
+                          next[idx] = { 
+                            ...next[idx], 
+                            handlerParams: { ...handlerParams, pageName: e.target.value } 
+                          };
+                          set("events", next);
+                        }}
+                        className="h-8"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* 外部URL导航配置 */}
+                {ev.handlerParams?.type === 'external' && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-xs text-muted-foreground">目标URL</label>
+                      <Input
+                        placeholder="https://example.com"
+                        value={ev.handlerParams?.url || ''}
+                        onChange={(e) => {
+                          const next = [...events];
+                          const handlerParams = next[idx].handlerParams || {};
+                          next[idx] = { 
+                            ...next[idx], 
+                            handlerParams: { ...handlerParams, url: e.target.value } 
+                          };
+                          set("events", next);
+                        }}
+                        className="h-8"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground">打开方式</label>
+                      <Select
+                        value={ev.handlerParams?.target || '_self'}
+                        onValueChange={(value) => {
+                          const next = [...events];
+                          const handlerParams = next[idx].handlerParams || {};
+                          next[idx] = { 
+                            ...next[idx], 
+                            handlerParams: { ...handlerParams, target: value } 
+                          };
+                          set("events", next);
+                        }}
+                      >
+                        <SelectTrigger className="h-8">
+                          <SelectValue placeholder="选择打开方式" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="_self">当前窗口</SelectItem>
+                          <SelectItem value="_blank">新窗口</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                )}
+
+                {/* 替换历史记录选项 */}
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    checked={ev.handlerParams?.replace || false}
+                    onCheckedChange={(checked) => {
+                      const next = [...events];
+                      const handlerParams = next[idx].handlerParams || {};
+                      next[idx] = { 
+                        ...next[idx], 
+                        handlerParams: { ...handlerParams, replace: checked } 
+                      };
+                      set("events", next);
+                    }}
+                  />
+                  <label className="text-xs text-muted-foreground">替换当前历史记录</label>
+                </div>
+              </div>
+            )}
             
             {/* 事件处理脚本配置 */}
             <div>
@@ -2651,7 +2814,7 @@ function Inspector({
         </Button>
       </div>
       
-      <Accordion type="multiple" className="w-full" defaultValue={["basic", "style"]}>
+      <Accordion type="multiple" className="w-full" defaultValue={local.type === "DatePicker" ? ["basic", "style", "datepicker-config", "datepicker-advanced"] : ["basic", "style"]}>
         <AccordionItem value="basic">
           <AccordionTrigger className="text-sm font-medium">
             基础信息
@@ -3112,6 +3275,153 @@ function Inspector({
             </div>
           </AccordionContent>
         </AccordionItem>
+
+        {local.type === "DatePicker" && (
+          <AccordionItem value="datepicker-config">
+            <AccordionTrigger className="text-sm font-medium">
+              日期选择器配置
+            </AccordionTrigger>
+            <AccordionContent className="space-y-3">
+              <div className="grid gap-2">
+                <label className="text-xs">标签</label>
+                <Input 
+                  value={local.props?.label ?? ""} 
+                  onChange={(e) => set("label", e.target.value)} 
+                  placeholder="选择日期"
+                />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-xs">占位符</label>
+                <Input 
+                  value={local.props?.placeholder ?? ""} 
+                  onChange={(e) => set("placeholder", e.target.value)} 
+                  placeholder="请选择日期"
+                />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-xs">日期格式</label>
+                <Select value={local.props?.format ?? "yyyy-MM-dd"} onValueChange={(v) => set("format", v)}>
+                  <SelectTrigger className="h-8">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="yyyy-MM-dd">yyyy-MM-dd</SelectItem>
+                    <SelectItem value="yyyy/MM/dd">yyyy/MM/dd</SelectItem>
+                    <SelectItem value="yyyy/MM">yyyy/MM</SelectItem>
+                    <SelectItem value="dd/MM/yyyy">dd/MM/yyyy</SelectItem>
+                    <SelectItem value="MM/dd/yyyy">MM/dd/yyyy</SelectItem>
+                    <SelectItem value="yyyy年MM月dd日">yyyy年MM月dd日</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <label className="text-xs">选择模式</label>
+                <Select value={local.props?.mode ?? "single"} onValueChange={(v) => set("mode", v)}>
+                  <SelectTrigger className="h-8">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="single">单选</SelectItem>
+                    <SelectItem value="multiple">多选</SelectItem>
+                    <SelectItem value="range">范围选择</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch 
+                  id="disabled" 
+                  checked={local.props?.disabled === true} 
+                  onCheckedChange={(checked) => set("disabled", checked)} 
+                />
+                <label htmlFor="disabled" className="text-xs">禁用</label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch 
+                  id="required" 
+                  checked={local.props?.required === true} 
+                  onCheckedChange={(checked) => set("required", checked)} 
+                />
+                <label htmlFor="required" className="text-xs">必填字段</label>
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        )}
+
+        {local.type === "DatePicker" && (
+          <AccordionItem value="datepicker-advanced">
+            <AccordionTrigger className="text-sm font-medium">
+              高级设置
+            </AccordionTrigger>
+            <AccordionContent className="space-y-3">
+              <div className="grid gap-2">
+                <label className="text-xs">语言</label>
+                <Select value={local.props?.locale ?? "zh-CN"} onValueChange={(v) => set("locale", v)}>
+                  <SelectTrigger className="h-8">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="zh-CN">中文</SelectItem>
+                    <SelectItem value="en-US">English</SelectItem>
+                    <SelectItem value="ja-JP">日本語</SelectItem>
+                    <SelectItem value="ko-KR">한국어</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <label className="text-xs">一周开始</label>
+                <Select value={String(local.props?.weekStartsOn ?? 1)} onValueChange={(v) => set("weekStartsOn", Number(v))}>
+                  <SelectTrigger className="h-8">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">周日</SelectItem>
+                    <SelectItem value="1">周一</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch 
+                  id="showToday" 
+                  checked={local.props?.showToday !== false} 
+                  onCheckedChange={(checked) => set("showToday", checked)} 
+                />
+                <label htmlFor="showToday" className="text-xs">显示今天标记</label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch 
+                  id="showWeekNumbers" 
+                  checked={local.props?.showWeekNumbers === true} 
+                  onCheckedChange={(checked) => set("showWeekNumbers", checked)} 
+                />
+                <label htmlFor="showWeekNumbers" className="text-xs">显示周数</label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch 
+                  id="fixedWeeks" 
+                  checked={local.props?.fixedWeeks === true} 
+                  onCheckedChange={(checked) => set("fixedWeeks", checked)} 
+                />
+                <label htmlFor="fixedWeeks" className="text-xs">固定周数显示</label>
+              </div>
+              <div className="grid gap-2">
+                <label className="text-xs">最小日期</label>
+                <Input 
+                  type="date"
+                  value={local.props?.minDate ?? ""} 
+                  onChange={(e) => set("minDate", e.target.value)} 
+                />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-xs">最大日期</label>
+                <Input 
+                  type="date"
+                  value={local.props?.maxDate ?? ""} 
+                  onChange={(e) => set("maxDate", e.target.value)} 
+                />
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        )}
 
         {local.type === "Grid" && (
           <AccordionItem value="grid-config">
@@ -5023,94 +5333,7 @@ function Inspector({
                 </AccordionItem>
               )}
 
-              {local.type === "DatePicker" && (
-                <AccordionItem value="datepicker-config">
-                  <AccordionTrigger className="text-sm font-medium">
-                    日期选择器配置
-                  </AccordionTrigger>
-                  <AccordionContent className="space-y-3">
-                    <div className="grid gap-2">
-                      <label className="text-xs">标签</label>
-                      <Input 
-                        value={local.props?.label ?? ""} 
-                        onChange={(e) => set("label", e.target.value)} 
-                        placeholder="日期选择器"
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <label className="text-xs">日期类型</label>
-                      <Select value={local.props?.type ?? "date"} onValueChange={(v) => set("type", v)}>
-                        <SelectTrigger className="h-8">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="date">日期</SelectItem>
-                          <SelectItem value="datetime-local">日期时间</SelectItem>
-                          <SelectItem value="time">时间</SelectItem>
-                          <SelectItem value="month">月份</SelectItem>
-                          <SelectItem value="week">周</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="grid gap-2">
-                      <label className="text-xs">占位符文本</label>
-                      <Input 
-                        value={local.props?.placeholder ?? ""} 
-                        onChange={(e) => set("placeholder", e.target.value)} 
-                        placeholder="选择日期"
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <label className="text-xs">默认值</label>
-                      <Input 
-                        value={local.props?.value ?? ""} 
-                        onChange={(e) => set("value", e.target.value)} 
-                        placeholder="2024-01-01"
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <label className="text-xs">最小日期</label>
-                      <Input 
-                        value={local.props?.min ?? ""} 
-                        onChange={(e) => set("min", e.target.value)} 
-                        placeholder="2020-01-01"
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <label className="text-xs">最大日期</label>
-                      <Input 
-                        value={local.props?.max ?? ""} 
-                        onChange={(e) => set("max", e.target.value)} 
-                        placeholder="2030-12-31"
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <label className="text-xs">禁用状态</label>
-                      <div className="flex items-center space-x-2">
-                        <Switch 
-                          checked={local.props?.disabled ?? false} 
-                          onCheckedChange={(checked) => set("disabled", checked)} 
-                        />
-                        <span className="text-xs text-muted-foreground">
-                          {local.props?.disabled ? "已禁用" : "已启用"}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="grid gap-2">
-                      <label className="text-xs">必填字段</label>
-                      <div className="flex items-center space-x-2">
-                        <Switch 
-                          checked={local.props?.required ?? false} 
-                          onCheckedChange={(checked) => set("required", checked)} 
-                        />
-                        <span className="text-xs text-muted-foreground">
-                          {local.props?.required ? "必填" : "可选"}
-                        </span>
-                      </div>
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>
-              )}
+
 
               {local.type === "MultiSelect" && (
                 <>
@@ -5273,6 +5496,276 @@ function Inspector({
                   </div>
                 </>
               )}
+            </AccordionContent>
+          </AccordionItem>
+        )}
+
+        {local.type === "Header" && (
+          <AccordionItem value="header-config">
+            <AccordionTrigger className="text-sm font-medium">
+              Header配置
+            </AccordionTrigger>
+            <AccordionContent className="space-y-3">
+              {/* 基础设置 */}
+              <div className="grid gap-2">
+                <label className="text-xs">标题</label>
+                <Input 
+                  value={local.props?.title ?? "代码优化建议"} 
+                  onChange={(e) => set("title", e.target.value)} 
+                  placeholder="输入Header标题"
+                />
+              </div>
+              
+              <div className="grid gap-2">
+                <label className="text-xs">高度</label>
+                <Select value={local.props?.height?.toString() ?? "16"} onValueChange={(v) => set("height", parseInt(v))}>
+                  <SelectTrigger className="h-8">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="12">小 (48px)</SelectItem>
+                    <SelectItem value="16">默认 (64px)</SelectItem>
+                    <SelectItem value="20">大 (80px)</SelectItem>
+                    <SelectItem value="24">特大 (96px)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Logo设置 */}
+              <div className="grid gap-2">
+                <label className="text-xs">显示Logo</label>
+                <div className="flex items-center gap-2">
+                  <Switch 
+                    id="showLogo" 
+                    checked={local.props?.showLogo !== false} 
+                    onCheckedChange={(checked) => set("showLogo", checked)} 
+                  />
+                  <label htmlFor="showLogo" className="text-xs">显示Logo</label>
+                </div>
+              </div>
+
+              {local.props?.showLogo !== false && (
+                <>
+                  <div className="grid gap-2">
+                    <label className="text-xs">Logo大小</label>
+                    <Select value={local.props?.logoSize?.toString() ?? "6"} onValueChange={(v) => set("logoSize", parseInt(v))}>
+                      <SelectTrigger className="h-8">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="4">小 (16px)</SelectItem>
+                        <SelectItem value="6">默认 (24px)</SelectItem>
+                        <SelectItem value="8">大 (32px)</SelectItem>
+                        <SelectItem value="10">特大 (40px)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="grid gap-2">
+                    <label className="text-xs">Logo颜色</label>
+                    <Input 
+                      value={local.props?.logoColor ?? ""} 
+                      onChange={(e) => set("logoColor", e.target.value)} 
+                      placeholder="hsl(var(--primary))"
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* 标题设置 */}
+              <div className="grid gap-2">
+                <label className="text-xs">显示标题</label>
+                <div className="flex items-center gap-2">
+                  <Switch 
+                    id="showTitle" 
+                    checked={local.props?.showTitle !== false} 
+                    onCheckedChange={(checked) => set("showTitle", checked)} 
+                  />
+                  <label htmlFor="showTitle" className="text-xs">显示标题</label>
+                </div>
+              </div>
+
+              {local.props?.showTitle !== false && (
+                <div className="grid gap-2">
+                  <label className="text-xs">标题大小</label>
+                  <Select value={local.props?.titleSize ?? "xl"} onValueChange={(v) => set("titleSize", v)}>
+                    <SelectTrigger className="h-8">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="sm">小</SelectItem>
+                      <SelectItem value="base">默认</SelectItem>
+                      <SelectItem value="lg">大</SelectItem>
+                      <SelectItem value="xl">特大</SelectItem>
+                      <SelectItem value="2xl">超大</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {/* 导航设置 */}
+              <div className="grid gap-2">
+                <label className="text-xs">显示导航</label>
+                <div className="flex items-center gap-2">
+                  <Switch 
+                    id="showNav" 
+                    checked={local.props?.showNav !== false} 
+                    onCheckedChange={(checked) => set("showNav", checked)} 
+                  />
+                  <label htmlFor="showNav" className="text-xs">显示导航菜单</label>
+                </div>
+              </div>
+
+              {local.props?.showNav !== false && (
+                <>
+                  <div className="grid gap-2">
+                    <label className="text-xs">导航布局</label>
+                    <Select value={local.props?.navLayout ?? "horizontal"} onValueChange={(v) => set("navLayout", v)}>
+                      <SelectTrigger className="h-8">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="horizontal">水平</SelectItem>
+                        <SelectItem value="vertical">垂直</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="grid gap-2">
+                    <label className="text-xs">导航项配置</label>
+                    <Textarea 
+                      value={JSON.stringify(local.props?.navItems ?? [
+                        { to: "/", label: "首页" },
+                        { to: "/guide", label: "指南" },
+                        { to: "/studio", label: "设计" }
+                      ], null, 2)} 
+                      onChange={(e) => {
+                        try {
+                          const v = JSON.parse(e.target.value || "[]");
+                          set("navItems", v);
+                        } catch {}
+                      }} 
+                      placeholder='[{"to": "/", "label": "首页"}]'
+                      rows={4}
+                    />
+                    <div className="text-[11px] text-muted-foreground">
+                      {/* JSON格式：[{"to": "路径", "label": "显示文本"}] */}
+                    </div>
+                  </div>
+                  
+                  <div className="grid gap-2">
+                    <label className="text-xs">当前激活路径</label>
+                    <Input 
+                      value={local.props?.activeNav ?? ""} 
+                      onChange={(e) => set("activeNav", e.target.value)} 
+                      placeholder="/current-path"
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* 主题切换器设置 */}
+              <div className="grid gap-2">
+                <label className="text-xs">显示主题切换器</label>
+                <div className="flex items-center gap-2">
+                  <Switch 
+                    id="showThemeSwitcher" 
+                    checked={local.props?.showThemeSwitcher !== false} 
+                    onCheckedChange={(checked) => set("showThemeSwitcher", checked)} 
+                  />
+                  <label htmlFor="showThemeSwitcher" className="text-xs">显示主题切换器</label>
+                </div>
+              </div>
+
+              {local.props?.showThemeSwitcher !== false && (
+                <div className="grid gap-2">
+                  <label className="text-xs">主题名称</label>
+                  <Input 
+                    value={local.props?.themeName ?? "主题"} 
+                    onChange={(e) => set("themeName", e.target.value)} 
+                    placeholder="主题"
+                  />
+                </div>
+              )}
+
+              {/* 自定义按钮设置 */}
+              <div className="grid gap-2">
+                <label className="text-xs">显示自定义按钮</label>
+                <div className="flex items-center gap-2">
+                  <Switch 
+                    id="showCustomButton" 
+                    checked={local.props?.showCustomButton === true} 
+                    onCheckedChange={(checked) => set("showCustomButton", checked)} 
+                  />
+                  <label htmlFor="showCustomButton" className="text-xs">显示自定义按钮</label>
+                </div>
+              </div>
+
+              {local.props?.showCustomButton && (
+                <>
+                  <div className="grid gap-2">
+                    <label className="text-xs">按钮文本</label>
+                    <Input 
+                      value={local.props?.customButtonText ?? "按钮"} 
+                      onChange={(e) => set("customButtonText", e.target.value)} 
+                      placeholder="按钮文本"
+                    />
+                  </div>
+                  
+                  <div className="grid gap-2">
+                    <label className="text-xs">按钮样式</label>
+                    <Select value={local.props?.customButtonVariant ?? "outline"} onValueChange={(v) => set("customButtonVariant", v)}>
+                      <SelectTrigger className="h-8">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="default">默认</SelectItem>
+                        <SelectItem value="destructive">危险</SelectItem>
+                        <SelectItem value="outline">轮廓</SelectItem>
+                        <SelectItem value="secondary">次要</SelectItem>
+                        <SelectItem value="ghost">幽灵</SelectItem>
+                        <SelectItem value="link">链接</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="grid gap-2">
+                    <label className="text-xs">按钮大小</label>
+                    <Select value={local.props?.customButtonSize ?? "sm"} onValueChange={(v) => set("customButtonSize", v)}>
+                      <SelectTrigger className="h-8">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="sm">小</SelectItem>
+                        <SelectItem value="default">默认</SelectItem>
+                        <SelectItem value="lg">大</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="grid gap-2">
+                    <label className="text-xs">按钮图标</label>
+                    <Input 
+                      value={local.props?.customButtonIcon ?? ""} 
+                      onChange={(e) => set("customButtonIcon", e.target.value)} 
+                      placeholder="fas fa-cog"
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* 布局设置 */}
+              <div className="grid gap-2">
+                <label className="text-xs">固定定位</label>
+                <div className="flex items-center gap-2">
+                  <Switch 
+                    id="sticky" 
+                    checked={local.props?.sticky !== false} 
+                    onCheckedChange={(checked) => set("sticky", checked)} 
+                  />
+                  <label htmlFor="sticky" className="text-xs">固定在顶部</label>
+                </div>
+              </div>
             </AccordionContent>
           </AccordionItem>
         )}
@@ -5485,6 +5978,231 @@ function Inspector({
           </AccordionItem>
         )}
 
+        {local.type === "DateRangePicker" && (
+          <AccordionItem value="daterangepicker-advanced">
+            <AccordionTrigger className="text-sm font-medium">
+              高级设置
+            </AccordionTrigger>
+            <AccordionContent className="space-y-3">
+              {/* 快捷选择预设 */}
+              <div className="grid gap-2">
+                <label className="text-xs">快捷选择预设</label>
+                <div className="flex items-center space-x-2">
+                  <Switch 
+                    checked={local.props?.showPresets ?? true} 
+                    onCheckedChange={(checked) => set("showPresets", checked)} 
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    {local.props?.showPresets ?? true ? "显示" : "隐藏"}快捷选择按钮
+                  </span>
+                </div>
+              </div>
+              
+              {/* 自定义预设 */}
+              {(local.props?.showPresets ?? true) && (
+                <div className="grid gap-2">
+                  <label className="text-xs">自定义预设 (JSON)</label>
+                  <Textarea 
+                    value={JSON.stringify(local.props?.customPresets ?? [], null, 2)} 
+                    onChange={(e) => {
+                      try {
+                        const presets = JSON.parse(e.target.value);
+                        set("customPresets", presets);
+                      } catch (err) {
+                        // 忽略JSON解析错误
+                      }
+                    }} 
+                    placeholder='[{"label": "最近7天", "value": "last7days"}, {"label": "本月", "value": "thisMonth"}]'
+                    rows={3}
+                  />
+                  <div className="text-xs text-muted-foreground">
+                    自定义快捷选择选项，支持: last7days, last30days, thisMonth, lastMonth, thisYear, lastYear
+                  </div>
+                </div>
+              )}
+
+              {/* 时间选择 */}
+              <div className="grid gap-2">
+                <label className="text-xs">时间选择</label>
+                <div className="flex items-center space-x-2">
+                  <Switch 
+                    checked={local.props?.enableTime ?? false} 
+                    onCheckedChange={(checked) => set("enableTime", checked)} 
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    {local.props?.enableTime ?? false ? "启用" : "禁用"}时间选择
+                  </span>
+                </div>
+              </div>
+
+              {/* 时间格式 */}
+              {(local.props?.enableTime ?? false) && (
+                <div className="grid gap-2">
+                  <label className="text-xs">时间格式</label>
+                  <Select value={local.props?.timeFormat ?? "24"} onValueChange={(value) => set("timeFormat", value)}>
+                    <SelectTrigger className="h-8">
+                      <SelectValue placeholder="选择时间格式" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="24">24小时制 (14:30)</SelectItem>
+                      <SelectItem value="12">12小时制 (2:30 PM)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {/* 禁用日期 */}
+              <div className="grid gap-2">
+                <label className="text-xs">禁用日期规则</label>
+                <Select value={local.props?.disabledDates ?? "none"} onValueChange={(value) => set("disabledDates", value)}>
+                  <SelectTrigger className="h-8">
+                    <SelectValue placeholder="选择禁用规则" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">无禁用</SelectItem>
+                    <SelectItem value="weekends">禁用周末</SelectItem>
+                    <SelectItem value="weekdays">禁用工作日</SelectItem>
+                    <SelectItem value="past">禁用过去日期</SelectItem>
+                    <SelectItem value="future">禁用未来日期</SelectItem>
+                    <SelectItem value="custom">自定义禁用</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* 自定义禁用日期 */}
+              {local.props?.disabledDates === "custom" && (
+                <div className="grid gap-2">
+                  <label className="text-xs">自定义禁用日期 (JSON)</label>
+                  <Textarea 
+                    value={JSON.stringify(local.props?.customDisabledDates ?? [], null, 2)} 
+                    onChange={(e) => {
+                      try {
+                        const dates = JSON.parse(e.target.value);
+                        set("customDisabledDates", dates);
+                      } catch (err) {
+                        // 忽略JSON解析错误
+                      }
+                    }} 
+                    placeholder='["2024-01-01", "2024-12-25"]'
+                    rows={2}
+                  />
+                  <div className="text-xs text-muted-foreground">
+                    指定要禁用的具体日期列表
+                  </div>
+                </div>
+              )}
+
+              {/* 多语言支持 */}
+              <div className="grid gap-2">
+                <label className="text-xs">语言</label>
+                <Select value={local.props?.locale ?? "zh-CN"} onValueChange={(value) => set("locale", value)}>
+                  <SelectTrigger className="h-8">
+                    <SelectValue placeholder="选择语言" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="zh-CN">简体中文</SelectItem>
+                    <SelectItem value="zh-TW">繁体中文</SelectItem>
+                    <SelectItem value="en-US">English (US)</SelectItem>
+                    <SelectItem value="en-GB">English (UK)</SelectItem>
+                    <SelectItem value="ja-JP">日本語</SelectItem>
+                    <SelectItem value="ko-KR">한국어</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* 周开始日 */}
+              <div className="grid gap-2">
+                <label className="text-xs">周开始日</label>
+                <Select value={local.props?.weekStartsOn?.toString() ?? "1"} onValueChange={(value) => set("weekStartsOn", parseInt(value))}>
+                  <SelectTrigger className="h-8">
+                    <SelectValue placeholder="选择周开始日" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">周日</SelectItem>
+                    <SelectItem value="1">周一</SelectItem>
+                    <SelectItem value="2">周二</SelectItem>
+                    <SelectItem value="3">周三</SelectItem>
+                    <SelectItem value="4">周四</SelectItem>
+                    <SelectItem value="5">周五</SelectItem>
+                    <SelectItem value="6">周六</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* 验证设置 */}
+              <div className="grid gap-2">
+                <label className="text-xs">范围验证</label>
+                <div className="flex items-center space-x-2">
+                  <Switch 
+                    checked={local.props?.strictValidation ?? false} 
+                    onCheckedChange={(checked) => set("strictValidation", checked)} 
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    {local.props?.strictValidation ?? false ? "启用" : "禁用"}严格验证
+                  </span>
+                </div>
+              </div>
+
+              {/* 最大范围天数 */}
+              {(local.props?.strictValidation ?? false) && (
+                <div className="grid gap-2">
+                  <label className="text-xs">最大范围天数</label>
+                  <Input 
+                    type="number"
+                    value={local.props?.maxRangeDays ?? ""} 
+                    onChange={(e) => set("maxRangeDays", parseInt(e.target.value) || undefined)} 
+                    placeholder="365"
+                  />
+                  <div className="text-xs text-muted-foreground">
+                    限制可选择的最大日期范围天数
+                  </div>
+                </div>
+              )}
+
+              {/* 自定义样式 */}
+              <div className="grid gap-2">
+                <label className="text-xs">自定义主题色</label>
+                <Input 
+                  value={local.props?.primaryColor ?? ""} 
+                  onChange={(e) => set("primaryColor", e.target.value)} 
+                  placeholder="#3b82f6"
+                />
+                <div className="text-xs text-muted-foreground">
+                  自定义日期选择器的主题颜色 (CSS颜色值)
+                </div>
+              </div>
+
+              {/* 动画效果 */}
+              <div className="grid gap-2">
+                <label className="text-xs">动画效果</label>
+                <div className="flex items-center space-x-2">
+                  <Switch 
+                    checked={local.props?.enableAnimations ?? true} 
+                    onCheckedChange={(checked) => set("enableAnimations", checked)} 
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    {local.props?.enableAnimations ?? true ? "启用" : "禁用"}过渡动画
+                  </span>
+                </div>
+              </div>
+
+              {/* 自动关闭 */}
+              <div className="grid gap-2">
+                <label className="text-xs">自动关闭</label>
+                <div className="flex items-center space-x-2">
+                  <Switch 
+                    checked={local.props?.autoClose ?? true} 
+                    onCheckedChange={(checked) => set("autoClose", checked)} 
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    {local.props?.autoClose ?? true ? "选择完成后自动关闭" : "手动关闭"}
+                  </span>
+                </div>
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        )}
+
         {local.type === "PageTab" && (
           <AccordionItem value="pagetab-config">
             <AccordionTrigger className="text-sm font-medium">
@@ -5627,7 +6345,7 @@ export default function Studio() {
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
   const pageId = params.get("id");
-  const [page, setPage] = useState<PageMeta>(() => (pageId ? (getPage(pageId!) as PageMeta) ?? createPage("新页面", "content") : createPage("新页面", "content")));
+  const [page, setPage] = useState<PageMeta>(() => (pageId ? (getCachedPage(pageId!) as PageMeta) ?? createPage("新页面", "content") : createPage("新页面", "content")));
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [clipboard, setClipboard] = useState<NodeMeta | null>(null);
   const [cmdOpen, setCmdOpen] = useState(false);
@@ -5645,6 +6363,15 @@ export default function Studio() {
   const [editComponentDescription, setEditComponentDescription] = useState("");
   const [componentSearchTerm, setComponentSearchTerm] = useState("");
   const [accordionValue, setAccordionValue] = useState<string[]>([]);
+  const [allPages, setAllPages] = useState<PageMeta[]>([]);
+  const [selectedPageId, setSelectedPageId] = useState<string | null>(null);
+  const [pageViewMode, setPageViewMode] = useState<"list" | "tree">("list");
+  const [pageGroups, setPageGroups] = useState<PageGroup[]>([]);
+  const [groupDialog, setGroupDialog] = useState(false);
+  const [editingGroup, setEditingGroup] = useState<PageGroup | null>(null);
+  const [groupName, setGroupName] = useState("");
+  const [groupDescription, setGroupDescription] = useState("");
+  const [groupColor, setGroupColor] = useState("#6b7280");
 
   const commit = (next: PageMeta) => {
     setHistory((h) => [...h, page]);
@@ -5652,16 +6379,259 @@ export default function Studio() {
     setPage(next);
   };
 
+  // 切换到指定页面
+  const switchToPage = (targetPage: PageMeta) => {
+    // 保存当前页面（异步）
+    upsertCachedPage(page);
+    // 清空历史记录，因为这是页面切换而不是编辑操作
+    setHistory([]);
+    setFuture([]);
+    // 切换到新页面
+    setPage(targetPage);
+    // 清空选中状态
+    setSelectedId(null);
+    // 更新选中的页面ID
+    setSelectedPageId(targetPage.id);
+    // 更新URL参数
+    setParams({ id: targetPage.id }, { replace: true });
+  };
+
   useEffect(() => {
     setParams({ id: page.id }, { replace: true });
   }, [page.id]);
   useEffect(() => {
-    upsertPage(page);
+    upsertCachedPage(page);
   }, [page]);
   
   useEffect(() => {
-    setCustomComponents(loadCustomComponents());
+    // 初始化缓存和加载数据
+    const initializeData = async () => {
+      await initializePageCache();
+      setAllPages(getCachedPages());
+      setCustomComponents(loadCustomComponents());
+      
+      // 设置当前页面为选中状态
+      setSelectedPageId(page.id);
+      
+      // 启动智能预加载
+      smartPreloadPages();
+    };
+    
+    initializeData();
   }, []);
+
+  // 键盘事件处理
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // 只在页面管理区域有选中页面时处理Delete键
+      if (event.key === 'Delete' && selectedPageId && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        // 确保不是在输入框或其他可编辑元素中
+        const target = event.target as HTMLElement;
+        if (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA' && !target.isContentEditable) {
+          event.preventDefault();
+          deleteSelectedPage();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [selectedPageId]);
+
+  // 监听导航事件
+  useEffect(() => {
+    const handleNavigateToPage = (event: NavigateToPageEvent) => {
+      const { pageId, options = {} } = event;
+      
+      // 查找目标页面
+      const targetPage = getCachedPage(pageId);
+      if (!targetPage) {
+        console.warn(`页面 ${pageId} 不存在`);
+        return;
+      }
+      
+      // 根据选项决定是否保存当前页面
+      if (options.saveCurrentPage !== false) {
+        upsertCachedPage(page);
+      }
+      
+      // 根据选项决定是否清空历史记录
+      if (options.clearHistory !== false) {
+        setHistory([]);
+        setFuture([]);
+      }
+      
+      // 切换到目标页面
+      setPage(targetPage);
+      setSelectedId(null);
+      setSelectedPageId(targetPage.id);
+      
+      // 根据选项决定是否更新URL
+      if (options.updateUrl !== false) {
+        setParams({ id: targetPage.id }, { replace: true });
+      }
+      
+      // 发布页面切换事件
+      bus.publish(EVENT_TOPICS.PAGE_CHANGED, { pageId: targetPage.id, page: targetPage });
+    };
+
+    // 订阅导航事件
+    const unsubscribe = bus.subscribe(EVENT_TOPICS.NAVIGATE_TO_PAGE, handleNavigateToPage);
+    
+    return unsubscribe;
+  }, [page, setParams]);
+
+  // 更新页面列表的函数
+  const refreshPagesList = () => {
+    setAllPages(getCachedPages());
+  };
+
+  // 分组管理函数
+  const handleGroupCreate = async (name: string, description: string, color: string) => {
+    const newGroup: PageGroup = {
+      id: generateUUID(),
+      name,
+      description,
+      color,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+    await upsertPageGroup(newGroup);
+    const groups = loadPageGroups();
+    setPageGroups(groups);
+    setGroupDialog(false);
+    setGroupName("");
+    setGroupDescription("");
+    setGroupColor("#3b82f6");
+  };
+
+  const handleGroupEdit = async (groupId: string, name: string, description: string, color: string) => {
+    const group = getPageGroup(groupId);
+    if (group) {
+      const updatedGroup: PageGroup = {
+        ...group,
+        name,
+        description,
+        color,
+        updatedAt: Date.now()
+      };
+      await upsertPageGroup(updatedGroup);
+      const groups = loadPageGroups();
+      setPageGroups(groups);
+      setGroupDialog(false);
+      setEditingGroup(null);
+      setGroupName("");
+      setGroupDescription("");
+      setGroupColor("#3b82f6");
+    }
+  };
+
+  const handleGroupDelete = async (groupId: string) => {
+    if (confirm("确定要删除这个分组吗？分组中的页面将移动到未分组。")) {
+      // 将分组中的页面移动到未分组
+      const pages = getCachedPages();
+      const groupPages = pages.filter(p => p.groupId === groupId);
+      for (const page of groupPages) {
+        const updatedPage = { ...page, groupId: undefined, updatedAt: Date.now() };
+        await upsertCachedPage(updatedPage);
+      }
+      
+      await deletePageGroup(groupId);
+      const groups = loadPageGroups();
+      setPageGroups(groups);
+      refreshPagesList();
+    }
+  };
+
+  const handlePageMoveToGroup = async (pageId: string, groupId: string | null) => {
+    const page = getCachedPages().find(p => p.id === pageId);
+    if (page) {
+      const updatedPage = { ...page, groupId: groupId || undefined, updatedAt: Date.now() };
+      await upsertCachedPage(updatedPage);
+      refreshPagesList();
+    }
+  };
+
+  // 页面预加载函数
+  const preloadPage = (pageId: string) => {
+    // 如果页面还没有在缓存中，预加载它
+    if (!getCachedPage(pageId)) {
+      const pageData = getPage(pageId);
+      if (pageData) {
+        upsertCachedPage(pageData);
+      }
+    }
+  };
+
+  // 删除页面函数
+  const deleteSelectedPage = useCallback(async () => {
+    if (!selectedPageId) return;
+    
+    const pageToDelete = allPages.find(p => p.id === selectedPageId);
+    if (!pageToDelete) return;
+    
+    if (confirm(`确定要删除页面"${pageToDelete.name}"吗？`)) {
+      await deleteCachedPage(selectedPageId);
+      const remainingPages = getCachedPages();
+      
+      // 如果删除的是当前页面，需要切换到其他页面
+      if (selectedPageId === page.id) {
+        if (remainingPages.length > 0) {
+          switchToPage(remainingPages[0]);
+        } else {
+          const newPage = createPage("新页面", "content");
+          await upsertCachedPage(newPage);
+          switchToPage(newPage);
+        }
+      }
+      
+      // 清空选中状态
+      setSelectedPageId(null);
+      // 刷新页面列表
+      refreshPagesList();
+    }
+  }, [selectedPageId, allPages, page.id]);
+
+  // 清空所有页面函数（保留默认示例页面）
+  const clearAllPages = useCallback(async () => {
+    // 按创建时间排序，保留最早创建的4个页面（默认页面）
+    const sortedPages = [...allPages].sort((a, b) => a.createdAt - b.createdAt);
+    const defaultPages = sortedPages.slice(0, 4);
+    const pagesToDelete = sortedPages.slice(4);
+    
+    if (pagesToDelete.length === 0) {
+      alert("没有可清空的页面，只有默认示例页面。");
+      return;
+    }
+    
+    if (confirm(`确定要清空所有新增页面吗？这将删除 ${pagesToDelete.length} 个页面，但保留以下默认页面：\n${defaultPages.map(p => p.name).join('\n')}`)) {
+      // 删除所有新增页面
+      for (const pageToDelete of pagesToDelete) {
+        await deleteCachedPage(pageToDelete.id);
+      }
+      
+      const remainingPages = getCachedPages();
+      
+      // 如果当前页面被删除了，切换到第一个剩余页面
+      if (pagesToDelete.some(p => p.id === page.id)) {
+        if (remainingPages.length > 0) {
+          switchToPage(remainingPages[0]);
+        } else {
+          // 如果没有剩余页面，创建一个新页面
+          const newPage = createPage("新页面", "content");
+          await upsertCachedPage(newPage);
+          switchToPage(newPage);
+        }
+      }
+      
+      // 清空选中状态
+      setSelectedPageId(null);
+      // 刷新页面列表
+      refreshPagesList();
+    }
+  }, [allPages, page.id]);
 
   const selected = useMemo<NodeMeta | null>(() => {
     const find = (n: NodeMeta): NodeMeta | null => {
@@ -5983,6 +6953,12 @@ export default function Studio() {
     });
   };
 
+  // 加载分组数据
+  useEffect(() => {
+    const groups = loadPageGroups();
+    setPageGroups(groups);
+  }, []);
+
   // keyboard shortcuts (global except paste)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -6032,8 +7008,8 @@ export default function Studio() {
   const goRun = () => {
     // 确保页面数据已保存到localStorage
     upsertPage(page);
-    // 使用页面ID作为参数，更简洁
-    const previewUrl = `${window.location.origin}/preview.html?id=${page.id}`;
+    // 使用SPA内的预览路由，避免整页刷新
+    const previewUrl = `${window.location.origin}/preview/${page.id}`;
     window.open(previewUrl, '_blank', 'noopener,noreferrer');
   };
 
@@ -6195,6 +7171,7 @@ export default function Studio() {
       { key: "Sheet", label: "侧边栏" },
     ],
     "导航组件": [
+      { key: "Header", label: "页面头部" },
       { key: "Tabs", label: "标签页" },
       { key: "Accordion", label: "手风琴" },
       { key: "Collapsible", label: "折叠面板" },
@@ -6329,11 +7306,200 @@ export default function Studio() {
   return (
     <div className="grid h-[calc(100vh-4rem)] grid-cols-[260px_1fr_300px]">
       <div className="border-r p-3">
-        <Tabs defaultValue="layouts" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+        <Tabs defaultValue="pages" className="w-full">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="pages">页面</TabsTrigger>
             <TabsTrigger value="layouts">布局</TabsTrigger>
             <TabsTrigger value="components">组件库</TabsTrigger>
           </TabsList>
+          
+          <TabsContent value="pages" className="mt-3">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex gap-2">
+                  <div className="flex border rounded-md">
+                    <Button
+                      size="sm"
+                      variant={pageViewMode === "list" ? "default" : "ghost"}
+                      className="rounded-r-none border-r"
+                      onClick={() => setPageViewMode("list")}
+                    >
+                      <List className="h-3 w-3" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={pageViewMode === "tree" ? "default" : "ghost"}
+                      className="rounded-l-none"
+                      onClick={() => setPageViewMode("tree")}
+                    >
+                      <TreePine className="h-3 w-3" />
+                    </Button>
+                  </div>
+                  <Button
+                     size="sm"
+                     onClick={async () => {
+                       const newPage = createPage("新页面", "content");
+                       await upsertCachedPage(newPage);
+                       refreshPagesList();
+                       switchToPage(newPage);
+                     }}
+                   >
+                    新建
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={clearAllPages}
+                  >
+                    清空所有
+                  </Button>
+                </div>
+              </div>
+              
+              <div className="space-y-2 max-h-[calc(100vh-12rem)] overflow-y-auto">
+                {pageViewMode === "list" ? (
+                  // 列表视图
+                  <>
+                    {allPages.map((p) => (
+                      <div
+                        key={p.id}
+                        tabIndex={0}
+                        className={`group flex flex-col gap-1 rounded border p-2 text-xs cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${
+                          p.id === page.id ? 'bg-primary/10 border-primary' : 
+                          selectedPageId === p.id ? 'bg-accent border-accent-foreground' : 'hover:bg-accent'
+                        }`}
+                        onClick={() => {
+                          setSelectedPageId(p.id);
+                          switchToPage(p);
+                        }}
+                        onFocus={() => setSelectedPageId(p.id)}
+                        onMouseEnter={() => preloadPage(p.id)}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="font-medium truncate flex-1">{p.name}</div>
+                          <div className="opacity-0 group-hover:opacity-100 flex gap-1">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-5 w-5 p-0"
+                              onClick={async (e) => {
+                                 e.stopPropagation();
+                                 const newPage = { ...p, id: generateUUID(), name: `${p.name} 副本`, createdAt: Date.now(), updatedAt: Date.now() };
+                                 await upsertCachedPage(newPage);
+                                 refreshPagesList();
+                                 switchToPage(newPage);
+                               }}
+                            >
+                              <Copy className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-5 w-5 p-0 text-destructive hover:text-destructive"
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                if (confirm(`确定要删除页面"${p.name}"吗？`)) {
+                                  await deleteCachedPage(p.id);
+                                  const remainingPages = getCachedPages();
+                                  
+                                  // 如果删除的是当前页面，需要切换到其他页面
+                                  if (p.id === page.id) {
+                                    if (remainingPages.length > 0) {
+                                      switchToPage(remainingPages[0]);
+                                    } else {
+                                      const newPage = createPage("新页面", "content");
+                                      await upsertCachedPage(newPage);
+                                      switchToPage(newPage);
+                                    }
+                                  }
+                                  
+                                  // 刷新页面列表
+                                  refreshPagesList();
+                                }
+                              }}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between text-muted-foreground">
+                          <span className="text-xs">{p.template}</span>
+                          <span className="text-xs">{new Date(p.createdAt).toLocaleDateString()}</span>
+                        </div>
+                      </div>
+                    ))}
+                    
+                    {loadPages().length === 0 && (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <div className="text-sm">暂无页面</div>
+                        <div className="text-xs mt-1">点击"新建"创建第一个页面</div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  // 树视图
+                  <PageTreeView
+                    pages={allPages}
+                    groups={pageGroups}
+                    currentPageId={page.id}
+                    selectedPageId={selectedPageId}
+                    onPageSelect={(p) => {
+                      setSelectedPageId(p.id);
+                      switchToPage(p);
+                    }}
+                    onPageFocus={(pageId) => setSelectedPageId(pageId)}
+                    onPagePreload={(pageId) => preloadPage(pageId)}
+                    onPageCopy={async (p) => {
+                      const newPage = { ...p, id: generateUUID(), name: `${p.name} 副本`, createdAt: Date.now(), updatedAt: Date.now() };
+                      await upsertCachedPage(newPage);
+                      refreshPagesList();
+                      switchToPage(newPage);
+                    }}
+                    onPageDelete={async (p) => {
+                      await deleteCachedPage(p.id);
+                      const remainingPages = getCachedPages();
+                      
+                      // 如果删除的是当前页面，需要切换到其他页面
+                      if (p.id === page.id) {
+                        if (remainingPages.length > 0) {
+                          switchToPage(remainingPages[0]);
+                        } else {
+                          const newPage = createPage("新页面", "content");
+                          await upsertCachedPage(newPage);
+                          switchToPage(newPage);
+                        }
+                      }
+                      
+                      // 刷新页面列表
+                      refreshPagesList();
+                    }}
+                    onGroupCreate={() => {
+                      setEditingGroup(null);
+                      setGroupName("");
+                      setGroupDescription("");
+                      setGroupColor("#3b82f6");
+                      setGroupDialog(true);
+                    }}
+                    onGroupEdit={(group) => {
+                      setEditingGroup(group);
+                      setGroupName(group.name);
+                      setGroupDescription(group.description || "");
+                      setGroupColor(group.color || "#3b82f6");
+                      setGroupDialog(true);
+                    }}
+                    onGroupDelete={(group) => handleGroupDelete(group.id)}
+                    onPageMoveToGroup={(page, groupId) => handlePageMoveToGroup(page.id, groupId)}
+                    onPageCreateInGroup={async (groupId) => {
+                      const newPage = createPage("新页面", "content");
+                      newPage.groupId = groupId;
+                      await upsertCachedPage(newPage);
+                      switchToPage(newPage);
+                    }}
+                  />
+                )}
+              </div>
+            </div>
+          </TabsContent>
           
           <TabsContent value="layouts" className="mt-3">
             <Accordion type="multiple" className="w-full" value={accordionValue} onValueChange={setAccordionValue}>
@@ -6350,7 +7516,11 @@ export default function Studio() {
                           variant="outline"
                           size="sm"
                           className="h-auto p-3 flex flex-col items-start text-left"
-                          onClick={() => commit(createPage(`${template.label}-${loadPages().length + 1}`, template.template as TemplateKind))}
+                          onClick={() => {
+                            const newPage = createPage(`${template.label}-${loadPages().length + 1}`, template.template as TemplateKind);
+                            upsertPage(newPage);
+                            switchToPage(newPage);
+                          }}
                         >
                           <div className="font-medium text-sm">{template.label}</div>
                           <div className="text-xs text-muted-foreground mt-1">{template.description}</div>
@@ -6483,11 +7653,6 @@ export default function Studio() {
         <div className="flex items-center justify-between border-b px-3 py-2">
           <div className="font-medium">设计态 · {page.name}</div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={async () => {
-              const newPage = createPage("新页面", "content");
-              await upsertPage(newPage);
-              navigate(`/studio?id=${newPage.id}`);
-            }}>新增页面</Button>
             <Button variant="outline" onClick={undo} disabled={!history.length}>撤销</Button>
             <Button variant="outline" onClick={redo} disabled={!future.length}>重做</Button>
             <Button variant="destructive" disabled={!selectedId} onClick={() => selectedId && deleteNode(selectedId)}>删除</Button>
@@ -6607,6 +7772,75 @@ export default function Studio() {
               <label className="text-xs">页面名称</label>
               <Input value={page.name} onChange={(e) => commit({ ...page, name: e.target.value, updatedAt: Date.now() })} />
               <div className="text-xs text-muted-foreground">模板：{page.template}</div>
+              
+              {/* 多根节点管理 */}
+              <div className="space-y-2">
+                <label className="text-xs">根节点管理</label>
+                <div className="text-xs text-muted-foreground">
+                  当前根节点数量: {getPageRoots(page).length}
+                </div>
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => {
+                      const newRoot = createNode("Container", { 
+                        props: { 
+                          className: "min-h-[200px] border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center text-gray-500" 
+                        }
+                      });
+                      const updatedPage = { ...page };
+                      addPageRoot(updatedPage, newRoot);
+                      commit(updatedPage);
+                    }}
+                  >
+                    添加根节点
+                  </Button>
+                  {getPageRoots(page).length > 1 && (
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => {
+                        const roots = getPageRoots(page);
+                        if (roots.length > 1) {
+                          const updatedPage = { ...page };
+                          removePageRoot(updatedPage, roots[roots.length - 1].id);
+                          commit(updatedPage);
+                        }
+                      }}
+                    >
+                      删除最后根节点
+                    </Button>
+                  )}
+                </div>
+                {getPageRoots(page).length > 1 && (
+                  <div className="text-xs text-muted-foreground">
+                    根节点列表:
+                    <ul className="ml-2 mt-1">
+                      {getPageRoots(page).map((root, index) => (
+                        <li key={root.id} className="flex items-center justify-between">
+                          <span>#{index + 1}: {root.type} ({root.id.slice(0, 8)}...)</span>
+                          {getPageRoots(page).length > 1 && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-4 w-4 p-0 text-red-500 hover:text-red-700"
+                              onClick={() => {
+                                const updatedPage = { ...page };
+                                removePageRoot(updatedPage, root.id);
+                                commit(updatedPage);
+                              }}
+                            >
+                              ×
+                            </Button>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+              
               <Button variant="secondary" onClick={() => navigator.clipboard.writeText(JSON.stringify(page))}>
                 复制页面元数据
               </Button>
@@ -6685,6 +7919,69 @@ export default function Studio() {
               </Button>
               <Button onClick={updateCustomComponent} disabled={!editComponentName.trim()}>
                 保存
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 分组管理对话框 */}
+      <Dialog open={groupDialog} onOpenChange={setGroupDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingGroup ? "编辑分组" : "创建分组"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid gap-2">
+              <label className="text-sm font-medium">分组名称</label>
+              <Input 
+                value={groupName} 
+                onChange={(e) => setGroupName(e.target.value)}
+                placeholder="请输入分组名称"
+              />
+            </div>
+            <div className="grid gap-2">
+              <label className="text-sm font-medium">分组描述</label>
+              <Textarea 
+                value={groupDescription} 
+                onChange={(e) => setGroupDescription(e.target.value)}
+                placeholder="请输入分组描述（可选）"
+                rows={3}
+              />
+            </div>
+            <div className="grid gap-2">
+              <label className="text-sm font-medium">分组颜色</label>
+              <div className="flex items-center gap-2">
+                <Input 
+                  type="color"
+                  value={groupColor} 
+                  onChange={(e) => setGroupColor(e.target.value)}
+                  className="w-16 h-8 p-1 border rounded"
+                />
+                <span className="text-sm text-muted-foreground">{groupColor}</span>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => {
+                setGroupDialog(false);
+                setEditingGroup(null);
+                setGroupName("");
+                setGroupDescription("");
+                setGroupColor("#3b82f6");
+              }}>
+                取消
+              </Button>
+              <Button 
+                onClick={() => {
+                  if (editingGroup) {
+                    handleGroupEdit(editingGroup.id, groupName, groupDescription, groupColor);
+                  } else {
+                    handleGroupCreate(groupName, groupDescription, groupColor);
+                  }
+                }} 
+                disabled={!groupName.trim()}
+              >
+                {editingGroup ? "保存" : "创建"}
               </Button>
             </div>
           </div>

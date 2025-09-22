@@ -1,5 +1,25 @@
 export type Handler<T = any> = (payload: T) => void;
 
+// 导航事件类型定义
+export interface NavigateToPageEvent {
+  pageId: string;
+  // 可选的额外参数
+  options?: {
+    // 是否保存当前页面状态
+    saveCurrentPage?: boolean;
+    // 是否清空历史记录
+    clearHistory?: boolean;
+    // 是否更新URL
+    updateUrl?: boolean;
+  };
+}
+
+// 事件主题常量
+export const EVENT_TOPICS = {
+  NAVIGATE_TO_PAGE: 'navigate-to-page',
+  PAGE_CHANGED: 'page-changed',
+} as const;
+
 class EventBus {
   private topics = new Map<string, Set<Handler>>();
 

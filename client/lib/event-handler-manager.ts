@@ -129,6 +129,50 @@ execHandler('openDialog', {
       { name: 'icon', type: 'string', required: false, description: '对话框图标' },
       { name: 'className', type: 'string', required: false, description: '自定义CSS类名' }
     ]
+  },
+  navigate: {
+    name: 'navigate',
+    description: '页面导航处理器',
+    eventTypes: ['page.navigate'],
+    exampleCode: {
+      curl: '# navigate 处理器不支持 HTTP 调用',
+      javascript: `// 导航到内部页面（预览模式）
+execHandler('navigate', {
+  type: 'internal',
+  pageId: '3a690afe-fa78-46b3-b32c-e078e3dfdbdb',
+  pageName: '用户列表页面'
+});
+
+// 导航到外部URL（新窗口）
+execHandler('navigate', {
+  type: 'external',
+  url: 'https://example.com',
+  target: '_blank'
+});
+
+// 导航到外部URL（当前窗口）
+execHandler('navigate', {
+  type: 'external',
+  url: 'https://example.com',
+  target: '_self'
+});
+
+// 替换当前页面历史记录
+execHandler('navigate', {
+  type: 'internal',
+  pageId: 'dashboard-page-id',
+  replace: true
+});`,
+      description: '导航到指定页面或URL，支持内部页面预览和外部链接'
+    },
+    parameters: [
+      { name: 'type', type: 'string', required: false, description: '导航类型：internal(内部页面) 或 external(外部URL)', defaultValue: 'internal' },
+      { name: 'pageId', type: 'string', required: false, description: '目标页面ID（内部导航时使用）' },
+      { name: 'pageName', type: 'string', required: false, description: '目标页面名称（内部导航时使用）' },
+      { name: 'url', type: 'string', required: false, description: '外部URL地址（外部导航时使用）' },
+      { name: 'target', type: 'string', required: false, description: '打开方式：_self(当前窗口) 或 _blank(新窗口)', defaultValue: '_self' },
+      { name: 'replace', type: 'boolean', required: false, description: '是否替换当前历史记录', defaultValue: false }
+    ]
   }
 };
 
