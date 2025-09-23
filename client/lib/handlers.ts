@@ -1,5 +1,6 @@
 import { bus } from "./eventBus";
 import { formValidationManager } from "../studio/form-validation";
+import navigationHistory from "./navigation-history";
 
 export type HandlerContext = {
   getText: (id: string) => string | null;
@@ -48,7 +49,7 @@ const handlers: Record<string, NamedHandler> = {
     ctx.setText(params.id, params?.text ?? "");
   },
   navigate: (params, ctx) => {
-    const { pageId, pageName, url, target = '_self', replace = false, type = 'internal' } = params;
+    const { pageId, pageName, url, target = '_self', replace = false, type = 'internal', fromHistory = false } = params;
     
     if (type === 'external' && url) {
       // 外部URL导航
@@ -69,8 +70,20 @@ const handlers: Record<string, NamedHandler> = {
       ctx.publish('page.navigate', {
         pageId: targetPage,
         pageName,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        fromHistory
       });
+      
+      // 只有非历史记录导航才添加到历史记录中
+      if (!fromHistory) {
+        navigationHistory.addToHistory({
+          pageId: targetPage,
+          pageName,
+          url: `/preview/${encodeURIComponent(targetPage)}`,
+          timestamp: Date.now(),
+          title: pageName || targetPage
+        });
+      }
       
       // 检查是否在Studio环境中
       if (window.location.pathname.includes('/studio')) {
@@ -254,6 +267,70 @@ const handlers: Record<string, NamedHandler> = {
       throw error;
     }
   },
+  
+  navigateBack: (params, ctx) => {
+    const historyItem = navigationHistory.goBack();
+    if (historyItem) {
+      console.log('导航后退到:', historyItem);
+      
+      // 发布导航事件
+      ctx.publish('page.navigate', {
+        pageId: historyItem.pageId,
+        pageName: historyItem.pageName,
+        fromHistory: true
+      });
+      
+      // 使用SPA导航，避免页面刷新
+      window.history.pushState(
+        { pageId: historyItem.pageId, fromHistory: true },
+        historyItem.title || historyItem.pageId,
+        historyItem.url
+      );
+      
+      // 触发自定义导航事件
+      window.dispatchEvent(new CustomEvent('spa-navigate', {
+        detail: {
+          pageId: historyItem.pageId,
+          pageName: historyItem.pageName,
+          fromHistory: true
+        }
+      }));
+    } else {
+      console.log('无法后退：已在历史记录的开始位置');
+    }
+  },
+  
+  navigateForward: (params, ctx) => {
+    const historyItem = navigationHistory.goForward();
+    if (historyItem) {
+      console.log('导航前进到:', historyItem);
+      
+      // 发布导航事件
+      ctx.publish('page.navigate', {
+        pageId: historyItem.pageId,
+        pageName: historyItem.pageName,
+        fromHistory: true
+      });
+      
+      // 使用SPA导航，避免页面刷新
+      window.history.pushState(
+        { pageId: historyItem.pageId, fromHistory: true },
+        historyItem.title || historyItem.pageId,
+        historyItem.url
+      );
+      
+      // 触发自定义导航事件
+      window.dispatchEvent(new CustomEvent('spa-navigate', {
+        detail: {
+          pageId: historyItem.pageId,
+          pageName: historyItem.pageName,
+          fromHistory: true
+        }
+      }));
+    } else {
+      console.log('无法前进：已在历史记录的末尾位置');
+    }
+  }
 };
 
 export function getHandlers() {

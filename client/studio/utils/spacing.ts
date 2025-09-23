@@ -160,6 +160,11 @@ export function getDefaultSpacing(componentType: string): { margin?: SpacingConf
       padding: { all: "4" }
     },
     
+    // Header 组件不需要默认间距
+    Header: {
+      margin: { all: "0" }
+    },
+    
     // 其他组件使用最小间距
     default: {
       margin: { all: "1" }

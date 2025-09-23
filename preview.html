@@ -63,25 +63,31 @@
     </div>
     
     <script type="module">
-        // 应用主题
+        // 应用主题 - 立即同步应用，避免闪烁
         function applyTheme() {
             try {
                 const savedThemeId = localStorage.getItem('app.theme');
-                if (savedThemeId) {
-                    // 动态导入主题模块
-                    import('/client/theme/themes.ts').then(({ getThemeById }) => {
-                        const theme = getThemeById(savedThemeId);
-                        if (theme) {
-                            const root = document.documentElement;
-                            for (const [key, value] of Object.entries(theme.vars)) {
-                                root.style.setProperty(`--${key}`, value);
+                // 立即导入主题预加载模块，确保主题同步应用
+                import('/client/hooks/use-theme.ts').then(({ preloadTheme }) => {
+                    preloadTheme();
+                }).catch(err => {
+                    console.warn('无法加载主题预加载模块:', err);
+                    // 降级处理：异步加载主题
+                    if (savedThemeId) {
+                        import('/client/theme/themes.ts').then(({ getThemeById }) => {
+                            const theme = getThemeById(savedThemeId);
+                            if (theme) {
+                                const root = document.documentElement;
+                                for (const [key, value] of Object.entries(theme.vars)) {
+                                    root.style.setProperty(`--${key}`, value);
+                                }
+                                root.setAttribute("data-theme", theme.id);
                             }
-                            root.setAttribute("data-theme", theme.id);
-                        }
-                    }).catch(err => {
-                        console.warn('无法加载主题:', err);
-                    });
-                }
+                        }).catch(err => {
+                            console.warn('无法加载主题:', err);
+                        });
+                    }
+                });
             } catch (err) {
                 console.warn('应用主题失败:', err);
             }

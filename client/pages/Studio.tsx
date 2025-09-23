@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { createNode, createPage, NodeMeta, PageMeta, PageGroup, TemplateKind, CustomComponent, getPageRoots, setPageRoots, addPageRoot, removePageRoot } from "@/studio/types";
-import { getPage, loadPages, upsertPage, upsertCustomComponent, loadCustomComponents, deleteCustomComponent as deleteCustomComponentFromStorage, loadPageGroups, savePageGroups, upsertPageGroup, deletePageGroup } from "@/studio/storage";
+import { getPage, loadPages, upsertPage, upsertCustomComponent, loadCustomComponents, deleteCustomComponent as deleteCustomComponentFromStorage, loadPageGroups, savePageGroups, upsertPageGroup, deletePageGroup, getPageGroup } from "@/studio/storage";
 import { getCachedPage, getCachedPages, upsertCachedPage, deleteCachedPage, initializePageCache, smartPreloadPages } from "@/studio/page-cache";
 import { NodeRenderer } from "@/studio/registry";
 import { Separator } from "@/components/ui/separator";
@@ -18,12 +18,15 @@ import { eventHandlerManager } from "@/lib/event-handler-manager";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Switch } from "@/components/ui/switch";
-import { ChevronUp, ChevronDown, Edit, X, Copy, Code, FileText, Square, ExternalLink, List, TreePine } from "lucide-react";
+import { ChevronUp, ChevronDown, Edit, X, Copy, Code, FileText, Square, ExternalLink, List, ListTree } from "lucide-react";
 import { PageTreeView } from "@/components/PageTreeView";
 import Editor from "@monaco-editor/react";
 import { generateUUID } from "@/lib/utils";
 import { getSpacingClasses } from "@/studio/utils/spacing";
 import { migratePageSpacing } from "@/studio/utils/migration";
+
+// 容器类型定义 - 可以包含子组件的组件类型
+const containerTypes = ["Container", "Card", "CollapsibleCard", "ActionCard", "InfoCard", "StatsCard", "NavigationControls", "NestedPageContainer"];
 
 // 多根节点渲染组件
 function MultiRootRenderer({ 
@@ -36,9 +39,9 @@ function MultiRootRenderer({
   const roots = getPageRoots(page);
   
   return (
-    <div className="space-y-4">
+    <div className="h-full flex flex-col space-y-4">
       {roots.map((root, index) => (
-        <div key={root.id} className="relative">
+        <div key={root.id} className="relative flex-1 min-h-0">
           {roots.length > 1 && (
             <div className="absolute -top-2 -left-2 z-10 bg-blue-500 text-white text-xs px-2 py-1 rounded">
               根节点 {index + 1}
@@ -78,12 +81,23 @@ function Canvas({
   onDelete?: (nodeId: string) => void;
   onDuplicate?: (nodeId: string) => void;
 }) {
+  // 检测页面中是否有任何组件启用了removePadding
+  const hasRemovePaddingComponent = useMemo(() => {
+    const checkNode = (node: NodeMeta): boolean => {
+      // 检查当前节点是否启用了removePadding
+      if (node.props?.removePadding === true) {
+        return true;
+      }
+      // 递归检查子节点
+      return (node.children ?? []).some(child => checkNode(child));
+    };
+    return checkNode(page.root);
+  }, [page.root]);
   const createChild = (parentId: string, type: string) => {
     const walk = (n: NodeMeta): boolean => {
       if (n.id === parentId) {
         // 支持Container和所有Card变体类型接受子组件
-        const supportedTypes = ["Container", "Card", "CollapsibleCard", "ActionCard", "InfoCard", "StatsCard"];
-        if (!supportedTypes.includes(n.type)) return true; // ignore non-container types
+        if (!containerTypes.includes(n.type)) return true; // ignore non-container types
         const node = createNode(type as any);
         if (type === "Listener") node.props = { text: "监听器：已挂载" };
         n.children = [...(n.children ?? []), node];
@@ -100,8 +114,7 @@ function Canvas({
     const walk = (n: NodeMeta): boolean => {
       if (n.id === parentId) {
         // 支持Container和所有Card变体类型接受子组件
-        const supportedTypes = ["Container", "Card", "CollapsibleCard", "ActionCard", "InfoCard", "StatsCard"];
-        if (!supportedTypes.includes(n.type)) return true; // ignore non-container types
+        if (!containerTypes.includes(n.type)) return true; // ignore non-container types
         
         // 深拷贝自建组件的内容并添加到父容器
         const customNode = structuredClone(customComponent.component) as NodeMeta;
@@ -116,26 +129,28 @@ function Canvas({
   };
 
   return (
-    <div className="h-full overflow-y-auto overflow-x-hidden p-4">
-      <MultiRootRenderer
-        page={page}
-        ctx={{
-          design: true,
-          onSelect: setSelect,
-          selectedId: select,
-          insertSibling: (id: string, dir: any) => insertSibling(id, dir),
-          moveBeforeAfter,
-          moveAsChild,
-          createChild,
-          createCustomChild,
-          rootNode: page.root,
-          onPanelSizeChange,
-          onCopy,
-          onPaste,
-          onDelete,
-          onDuplicate,
-        }}
-      />
+    <div className="h-full overflow-hidden">
+      <div className="h-full">
+        <MultiRootRenderer
+          page={page}
+          ctx={{
+            design: true,
+            onSelect: setSelect,
+            selectedId: select,
+            insertSibling: (id: string, dir: any) => insertSibling(id, dir),
+            moveBeforeAfter,
+            moveAsChild,
+            createChild,
+            createCustomChild,
+            rootNode: page.root,
+            onPanelSizeChange,
+            onCopy,
+            onPaste,
+            onDelete,
+            onDuplicate,
+          }}
+        />
+      </div>
     </div>
   );
 }
@@ -167,6 +182,18 @@ function SplitPreview({
   onDelete?: (nodeId: string) => void;
   onDuplicate?: (nodeId: string) => void;
 }) {
+  // 检测页面中是否有任何组件启用了removePadding
+  const hasRemovePaddingComponent = useMemo(() => {
+    const checkNode = (node: NodeMeta): boolean => {
+      // 检查当前节点是否启用了removePadding
+      if (node.props?.removePadding === true) {
+        return true;
+      }
+      // 递归检查子节点
+      return (node.children ?? []).some(child => checkNode(child));
+    };
+    return checkNode(page.root);
+  }, [page.root]);
   const width = "100%" as const;
   const [open, setOpen] = useState(false);
   const [dlg, setDlg] = useState<{ title?: string; content?: any } | null>(null);
@@ -175,8 +202,7 @@ function SplitPreview({
     const walk = (n: NodeMeta): boolean => {
       if (n.id === parentId) {
         // 支持Container和所有Card变体类型接受子组件
-        const supportedTypes = ["Container", "Card", "CollapsibleCard", "ActionCard", "InfoCard", "StatsCard"];
-        if (!supportedTypes.includes(n.type)) return true; // ignore non-container types
+        if (!containerTypes.includes(n.type)) return true; // ignore non-container types
         const node = createNode(type as any);
         if (type === "Listener") node.props = { text: "监听器：已挂载" };
         n.children = [...(n.children ?? []), node];
@@ -193,8 +219,7 @@ function SplitPreview({
     const walk = (n: NodeMeta): boolean => {
       if (n.id === parentId) {
         // 支持Container和所有Card变体类型接受子组件
-        const supportedTypes = ["Container", "Card", "CollapsibleCard", "ActionCard", "InfoCard", "StatsCard"];
-        if (!supportedTypes.includes(n.type)) return true; // ignore non-container types
+        if (!containerTypes.includes(n.type)) return true; // ignore non-container types
         
         // 深拷贝自建组件的内容并添加到父容器
         const customNode = structuredClone(customComponent.component) as NodeMeta;
@@ -220,7 +245,7 @@ function SplitPreview({
       <ResizablePanel defaultSize={55} minSize={30}>
         <div className="h-full overflow-hidden">
           <div className="h-full w-full bg-background flex flex-col" style={{ width }}>
-            <div className="h-full overflow-y-auto overflow-x-hidden p-2">
+            <div className={`h-full overflow-y-auto overflow-x-hidden ${hasRemovePaddingComponent ? '' : 'p-2'}`}>
               <NodeRenderer
                 node={page.root}
                 ctx={{
@@ -246,10 +271,10 @@ function SplitPreview({
       </ResizablePanel>
       <ResizableHandle withHandle />
       <ResizablePanel defaultSize={45} minSize={30}>
-        <div className="h-full overflow-hidden p-4">
+        <div className="h-full overflow-hidden">
           <div className="mx-auto h-full w-full max-w-full rounded border bg-background shadow-sm flex flex-col" style={{ width, overflow: "hidden" }}>
-            <div className="border-b p-2 text-xs text-muted-foreground">预览</div>
-            <div className="flex-1 overflow-auto p-3">
+            <div className={`border-b text-xs text-muted-foreground ${hasRemovePaddingComponent ? 'p-1' : 'p-2'}`}>预览</div>
+            <div className="flex-1 overflow-auto">
               <MultiRootRenderer page={page} ctx={{ onPanelSizeChange }} />
             </div>
           </div>
@@ -2501,9 +2526,68 @@ function Inspector({
   page: PageMeta;
   updatePage: (page: PageMeta) => void;
 }) {
+  // 如果没有选中组件，显示页面属性编辑
+  if (!selected) {
+    return (
+      <div className="space-y-3 p-4">
+        <div className="font-medium text-sm">页面属性</div>
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs text-muted-foreground">页面名称</label>
+            <Input
+              value={page.name}
+              onChange={(e) => updatePage({ ...page, name: e.target.value })}
+              placeholder="输入页面名称"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground">页面描述</label>
+            <Textarea
+              value={page.description || ''}
+              onChange={(e) => updatePage({ ...page, description: e.target.value })}
+              placeholder="输入页面描述"
+              className="min-h-[60px] resize-none"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground">页面类型</label>
+            <Select
+              value={page.template}
+              onValueChange={(value) => updatePage({ ...page, template: value as TemplateKind })}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="blank">空白页面</SelectItem>
+                <SelectItem value="content">内容页面</SelectItem>
+                <SelectItem value="vscode">VSCode风格</SelectItem>
+                <SelectItem value="landing">落地页</SelectItem>
+                <SelectItem value="email">邮件模板</SelectItem>
+                <SelectItem value="home">首页</SelectItem>
+                <SelectItem value="admin">管理后台</SelectItem>
+                <SelectItem value="grid">网格布局</SelectItem>
+                <SelectItem value="dashboard">仪表板</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="text-xs text-muted-foreground">
+            页面ID: {page.id}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            创建时间: {new Date(page.createdAt).toLocaleString()}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            更新时间: {new Date(page.updatedAt).toLocaleString()}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const [local, setLocal] = useState<NodeMeta | null>(selected);
 
-  useEffect(() => setLocal(selected), [selected?.id]);
+  useEffect(() => setLocal(selected), [selected]);
 
   // 获取可转换的组件类型
   const getConvertibleTypes = (currentType: string) => {
@@ -2511,7 +2595,8 @@ function Inspector({
       // 容器与卡片类组件
       containers: [
         { value: "Container", label: "容器" },
-        { value: "Card", label: "基础卡片" }
+        { value: "Card", label: "基础卡片" },
+        { value: "NestedPageContainer", label: "嵌套页面容器" }
         // 暂时隐藏以下卡片类型：
         // { value: "CollapsibleCard", label: "可收缩卡片" },
         // { value: "ActionCard", label: "操作卡片" },
@@ -2577,7 +2662,6 @@ function Inspector({
     };
 
     // 容器类组件（可以包含子组件）
-    const containerTypes = ["Container", "Card", "CollapsibleCard", "ActionCard", "InfoCard", "StatsCard"];
     const isSourceContainer = containerTypes.includes(node.type);
     const isTargetContainer = containerTypes.includes(newType);
 
@@ -2586,6 +2670,25 @@ function Inspector({
       case "Container":
         converted.props = {
           ...commonProps,
+          layout: node.layout || "col",
+          flexEnabled: node.flexEnabled,
+          alignItems: node.alignItems
+        };
+        // 保留容器特有属性
+        converted.layout = node.layout || "col";
+        converted.flexEnabled = node.flexEnabled;
+        converted.alignItems = node.alignItems;
+        converted.locked = node.locked;
+        converted.resizable = node.resizable;
+        converted.resizableEnabled = node.resizableEnabled;
+        converted.panelSizes = node.panelSizes;
+        break;
+      
+      case "NestedPageContainer":
+        converted.props = {
+          ...commonProps,
+          pageId: node.props?.pageId || null,
+          // 保留原有的样式属性
           layout: node.layout || "col",
           flexEnabled: node.flexEnabled,
           alignItems: node.alignItems
@@ -2710,65 +2813,7 @@ function Inspector({
 
     return converted;
   };
-  
-  // 如果没有选中组件，显示页面属性编辑
-  if (!local) {
-    return (
-      <div className="space-y-3 p-4">
-        <div className="font-medium text-sm">页面属性</div>
-        <div className="space-y-3">
-          <div>
-            <label className="text-xs text-muted-foreground">页面名称</label>
-            <Input
-              value={page.name}
-              onChange={(e) => updatePage({ ...page, name: e.target.value })}
-              placeholder="输入页面名称"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground">页面描述</label>
-            <Textarea
-              value={page.description || ''}
-              onChange={(e) => updatePage({ ...page, description: e.target.value })}
-              placeholder="输入页面描述"
-              className="min-h-[60px] resize-none"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground">页面类型</label>
-            <Select
-              value={page.template}
-              onValueChange={(value) => updatePage({ ...page, template: value as TemplateKind })}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="blank">空白页面</SelectItem>
-                <SelectItem value="content">内容页面</SelectItem>
-                <SelectItem value="vscode">VSCode风格</SelectItem>
-                <SelectItem value="landing">落地页</SelectItem>
-                <SelectItem value="email">邮件模板</SelectItem>
-                <SelectItem value="home">首页</SelectItem>
-                <SelectItem value="admin">管理后台</SelectItem>
-                <SelectItem value="grid">网格布局</SelectItem>
-                <SelectItem value="dashboard">仪表板</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="text-xs text-muted-foreground">
-            页面ID: {page.id}
-          </div>
-          <div className="text-xs text-muted-foreground">
-            创建时间: {new Date(page.createdAt).toLocaleString()}
-          </div>
-          <div className="text-xs text-muted-foreground">
-            更新时间: {new Date(page.updatedAt).toLocaleString()}
-          </div>
-        </div>
-      </div>
-    );
-  }
+
 
   const set = (k: string, v: any) => {
     const copy = { ...local, props: { ...(local.props ?? {}), [k]: v } } as NodeMeta;
@@ -2804,8 +2849,8 @@ function Inspector({
   };
 
   return (
-    <div className="space-y-3 p-4">
-      <div className="flex gap-2">
+    <div className="h-full flex flex-col p-4">
+      <div className="flex gap-2 flex-shrink-0 mb-3">
         <Button size="sm" onClick={() => onCopy(local!)}>
           复制
         </Button>
@@ -2814,7 +2859,8 @@ function Inspector({
         </Button>
       </div>
       
-      <Accordion type="multiple" className="w-full" defaultValue={local.type === "DatePicker" ? ["basic", "style", "datepicker-config", "datepicker-advanced"] : ["basic", "style"]}>
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <Accordion type="multiple" className="w-full" defaultValue={local.type === "DatePicker" ? ["basic", "style", "datepicker-config", "datepicker-advanced"] : ["basic", "style"]}>
         <AccordionItem value="basic">
           <AccordionTrigger className="text-sm font-medium">
             基础信息
@@ -3759,7 +3805,7 @@ function Inspector({
                <Separator />
                
                {/* 表格外观配置 */}
-               <div className="space-y-3">
+               <div className="space-y-3 h-full flex flex-col">
                  <div className="text-xs font-medium">表格外观</div>
                  
                  <div className="grid gap-2">
@@ -5531,6 +5577,18 @@ function Inspector({
                 </Select>
               </div>
 
+              <div className="grid gap-2">
+                <label className="text-xs">移除内边距</label>
+                <div className="flex items-center gap-2">
+                  <Switch 
+                    id="removePadding" 
+                    checked={local.props?.removePadding === true} 
+                    onCheckedChange={(checked) => set("removePadding", checked)} 
+                  />
+                  <label htmlFor="removePadding" className="text-xs">移除容器内边距以完全贴合</label>
+                </div>
+              </div>
+
               {/* Logo设置 */}
               <div className="grid gap-2">
                 <label className="text-xs">显示Logo</label>
@@ -6271,6 +6329,152 @@ function Inspector({
           </AccordionItem>
         )}
 
+        {local.type === "NavigationControls" && (
+          <AccordionItem value="navigation-controls-config">
+            <AccordionTrigger className="text-sm font-medium">
+              导航控制器配置
+            </AccordionTrigger>
+            <AccordionContent className="space-y-3">
+              <div className="grid gap-2">
+                <label className="text-xs">显示后退按钮</label>
+                <div className="flex items-center space-x-2">
+                  <Switch 
+                    checked={local.props?.showBackButton ?? true} 
+                    onCheckedChange={(checked) => set("showBackButton", checked)} 
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    {local.props?.showBackButton ?? true ? "显示" : "隐藏"}后退按钮
+                  </span>
+                </div>
+              </div>
+              
+              <div className="grid gap-2">
+                <label className="text-xs">显示前进按钮</label>
+                <div className="flex items-center space-x-2">
+                  <Switch 
+                    checked={local.props?.showForwardButton ?? true} 
+                    onCheckedChange={(checked) => set("showForwardButton", checked)} 
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    {local.props?.showForwardButton ?? true ? "显示" : "隐藏"}前进按钮
+                  </span>
+                </div>
+              </div>
+              
+              <div className="grid gap-2">
+                <label className="text-xs">显示历史记录按钮</label>
+                <div className="flex items-center space-x-2">
+                  <Switch 
+                    checked={local.props?.showHistoryButton ?? true} 
+                    onCheckedChange={(checked) => set("showHistoryButton", checked)} 
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    {local.props?.showHistoryButton ?? true ? "显示" : "隐藏"}历史记录按钮
+                  </span>
+                </div>
+              </div>
+              
+              <Separator />
+              
+              <div className="grid gap-2">
+                <label className="text-xs">按钮大小</label>
+                <Select value={local.props?.buttonSize ?? "md"} onValueChange={(v) => set("buttonSize", v)}>
+                  <SelectTrigger className="h-8">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="sm">小</SelectItem>
+                    <SelectItem value="md">默认</SelectItem>
+                    <SelectItem value="lg">大</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="grid gap-2">
+                <label className="text-xs">按钮样式</label>
+                <Select value={local.props?.variant ?? "default"} onValueChange={(v) => set("variant", v)}>
+                  <SelectTrigger className="h-8">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="default">默认</SelectItem>
+                    <SelectItem value="outline">轮廓</SelectItem>
+                    <SelectItem value="ghost">幽灵</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="grid gap-2">
+                <label className="text-xs">自定义类名</label>
+                <Input 
+                  value={local.props?.className ?? ""} 
+                  onChange={(e) => set("className", e.target.value)}
+                  placeholder="自定义CSS类名"
+                />
+              </div>
+              
+              <Separator />
+              
+              <div className="grid gap-2">
+                <label className="text-xs">布局方向</label>
+                <Select value={local.props?.layout ?? "row"} onValueChange={(v) => set("layout", v)}>
+                  <SelectTrigger className="h-8">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="row">水平</SelectItem>
+                    <SelectItem value="col">垂直</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="grid gap-2">
+                <label className="text-xs">间距大小</label>
+                <Select value={local.props?.gap ?? "sm"} onValueChange={(v) => set("gap", v)}>
+                  <SelectTrigger className="h-8">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="sm">小</SelectItem>
+                    <SelectItem value="md">中</SelectItem>
+                    <SelectItem value="lg">大</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="grid gap-2">
+                <label className="text-xs">主轴对齐</label>
+                <Select value={local.props?.justify ?? "start"} onValueChange={(v) => set("justify", v)}>
+                  <SelectTrigger className="h-8">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="start">开始</SelectItem>
+                    <SelectItem value="center">居中</SelectItem>
+                    <SelectItem value="end">结束</SelectItem>
+                    <SelectItem value="between">两端</SelectItem>
+                    <SelectItem value="around">环绕</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="grid gap-2">
+                <label className="text-xs">交叉轴对齐</label>
+                <Select value={local.props?.align ?? "center"} onValueChange={(v) => set("align", v)}>
+                  <SelectTrigger className="h-8">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="start">开始</SelectItem>
+                    <SelectItem value="center">居中</SelectItem>
+                    <SelectItem value="end">结束</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        )}
+
         {local.type === "NestedPageContainer" && (
           <AccordionItem value="nestedpage-config">
             <AccordionTrigger className="text-sm font-medium">
@@ -6337,6 +6541,7 @@ function Inspector({
           </AccordionItem>
         )}
       </Accordion>
+      </div>
     </div>
   );
 }
@@ -6345,7 +6550,23 @@ export default function Studio() {
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
   const pageId = params.get("id");
-  const [page, setPage] = useState<PageMeta>(() => (pageId ? (getCachedPage(pageId!) as PageMeta) ?? createPage("新页面", "content") : createPage("新页面", "content")));
+  const [page, setPage] = useState<PageMeta>(() => {
+    if (pageId) {
+      return (getCachedPage(pageId!) as PageMeta) ?? createPage("新页面", "content");
+    } else {
+      // 创建包含Header组件的测试页面
+      const testPage = createPage("Header测试页面", "content");
+      // 在根容器中添加Header组件
+      const headerNode = createNode("Header", {
+        props: {
+          title: "测试Header",
+          removePadding: true // 启用removePadding来测试智能padding系统
+        }
+      });
+      testPage.root.children = [headerNode, ...(testPage.root.children || [])];
+      return testPage;
+    }
+  });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [clipboard, setClipboard] = useState<NodeMeta | null>(null);
   const [cmdOpen, setCmdOpen] = useState(false);
@@ -6428,8 +6649,12 @@ export default function Studio() {
         // 确保不是在输入框或其他可编辑元素中
         const target = event.target as HTMLElement;
         if (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA' && !target.isContentEditable) {
-          event.preventDefault();
-          deleteSelectedPage();
+          // 检查是否在页面管理区域（左侧面板）
+          const leftPanel = target.closest('.grid.h-\\[calc\\(100vh-4rem\\)\\].grid-cols-\\[260px_1fr_300px\\] > div:first-child');
+          if (leftPanel) {
+            event.preventDefault();
+            deleteSelectedPage();
+          }
         }
       }
     };
@@ -6962,11 +7187,15 @@ export default function Studio() {
   // keyboard shortcuts (global except paste)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "c" && selected) {
+      // 检查是否在设计区域（中间面板）
+      const target = e.target as HTMLElement;
+      const designArea = target.closest('.grid.h-\\[calc\\(100vh-4rem\\)\\].grid-cols-\\[260px_1fr_300px\\] > div:nth-child(2)');
+      
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "c" && selected && designArea) {
         e.preventDefault();
         onCopy(selected);
       }
-      if (e.key === "Delete" && selectedId) {
+      if (e.key === "Delete" && selectedId && designArea) {
         e.preventDefault();
         deleteNode(selectedId);
       }
@@ -6978,7 +7207,7 @@ export default function Studio() {
         e.preventDefault();
         redo();
       }
-      if (e.altKey && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) {
+      if (e.altKey && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key) && designArea) {
         e.preventDefault();
         const map: Record<string, "left" | "right" | "top" | "bottom"> = {
           ArrowLeft: "left",
@@ -6999,7 +7228,13 @@ export default function Studio() {
 
   // 设计面板专用的键盘事件监听（包含粘贴功能）
   const handleDesignPanelKeyDown = (e: React.KeyboardEvent) => {
-    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "v") {
+    // 检查是否在设计画布区域
+    const target = e.target as HTMLElement;
+    const isInDesignCanvas = target.closest('[data-design-canvas="true"]') || 
+                            target.closest('.flex-1.min-h-0') || 
+                            e.currentTarget.contains(target);
+    
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "v" && isInDesignCanvas) {
       e.preventDefault();
       onPaste();
     }
@@ -7092,6 +7327,7 @@ export default function Studio() {
     Sheet: "fas fa-file-alt",
     
     // 导航组件
+    NavigationControls: "fas fa-arrows-alt-h",
     Tabs: "fas fa-folder-open",
     Accordion: "fas fa-chevron-down",
     Collapsible: "fas fa-compress",
@@ -7172,6 +7408,7 @@ export default function Studio() {
     ],
     "导航组件": [
       { key: "Header", label: "页面头部" },
+      { key: "NavigationControls", label: "导航控制器" },
       { key: "Tabs", label: "标签页" },
       { key: "Accordion", label: "手风琴" },
       { key: "Collapsible", label: "折叠面板" },
@@ -7305,17 +7542,17 @@ export default function Studio() {
 
   return (
     <div className="grid h-[calc(100vh-4rem)] grid-cols-[260px_1fr_300px]">
-      <div className="border-r p-3">
-        <Tabs defaultValue="pages" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+      <div className="border-r p-3 h-full flex flex-col">
+        <Tabs defaultValue="pages" className="w-full h-full flex flex-col">
+          <TabsList className="grid w-full grid-cols-3 flex-shrink-0">
             <TabsTrigger value="pages">页面</TabsTrigger>
             <TabsTrigger value="layouts">布局</TabsTrigger>
             <TabsTrigger value="components">组件库</TabsTrigger>
           </TabsList>
           
-          <TabsContent value="pages" className="mt-3">
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
+          <TabsContent value="pages" className="mt-3 flex-1 min-h-0">
+            <div className="h-full flex flex-col">
+              <div className="flex items-center justify-between mb-3 flex-shrink-0">
                 <div className="flex gap-2">
                   <div className="flex border rounded-md">
                     <Button
@@ -7332,7 +7569,7 @@ export default function Studio() {
                       className="rounded-l-none"
                       onClick={() => setPageViewMode("tree")}
                     >
-                      <TreePine className="h-3 w-3" />
+                      <ListTree className="h-3 w-3" />
                     </Button>
                   </div>
                   <Button
@@ -7356,8 +7593,9 @@ export default function Studio() {
                 </div>
               </div>
               
-              <div className="space-y-2 max-h-[calc(100vh-12rem)] overflow-y-auto">
-                {pageViewMode === "list" ? (
+              <div className="flex-1 min-h-0 overflow-y-auto">
+                <div className="space-y-2">
+                  {pageViewMode === "list" ? (
                   // 列表视图
                   <>
                     {allPages.map((p) => (
@@ -7497,12 +7735,15 @@ export default function Studio() {
                     }}
                   />
                 )}
+                </div>
               </div>
             </div>
           </TabsContent>
           
-          <TabsContent value="layouts" className="mt-3">
-            <Accordion type="multiple" className="w-full" value={accordionValue} onValueChange={setAccordionValue}>
+          <TabsContent value="layouts" className="mt-3 flex-1 min-h-0">
+            <div className="h-full flex flex-col">
+              <div className="flex-1 min-h-0 overflow-y-auto">
+              <Accordion type="multiple" className="w-full" value={accordionValue} onValueChange={setAccordionValue}>
               {Object.entries(layoutTemplates).map(([groupName, templates]) => (
                 <AccordionItem key={groupName} value={groupName}>
                   <AccordionTrigger className="text-sm font-medium">
@@ -7531,20 +7772,24 @@ export default function Studio() {
                 </AccordionItem>
               ))}
             </Accordion>
+              </div>
+            </div>
           </TabsContent>
           
-          <TabsContent value="components" className="mt-3">
-            {/* 搜索输入框 */}
-            <div className="mb-3">
+          <TabsContent value="components" className="mt-3 flex-1 min-h-0">
+            <div className="h-full flex flex-col">
+              {/* 搜索输入框 */}
+              <div className="mb-3">
               <Input
                 placeholder="搜索组件..."
                 value={componentSearchTerm}
                 onChange={(e) => setComponentSearchTerm(e.target.value)}
                 className="h-8 text-sm"
               />
-            </div>
-            
-            <Accordion type="multiple" className="w-full" value={accordionValue} onValueChange={setAccordionValue}>
+              </div>
+              
+              <div className="flex-1 min-h-0 overflow-y-auto">
+                <Accordion type="multiple" className="w-full" value={accordionValue} onValueChange={setAccordionValue}>
               {/* 搜索结果为空提示 */}
               {componentSearchTerm.trim() && Object.keys(filteredComponentGroups).length === 0 && filteredCustomComponents.length === 0 && (
                 <div className="text-center py-8 text-muted-foreground">
@@ -7629,7 +7874,7 @@ export default function Studio() {
                       {components.map((item) => (
                         <div
                           key={item.key}
-                          className="flex cursor-pointer items-center rounded border p-2 text-xs hover:bg-accent gap-2"
+                          className="flex cursor-pointer items-center rounded border p-2 text-xs hover:bg-accent gap-2 "
                           draggable
                           onDragStart={(e) => {
                             e.dataTransfer.setData("application/x-node", JSON.stringify({ type: item.key }));
@@ -7645,7 +7890,9 @@ export default function Studio() {
                   </AccordionContent>
                 </AccordionItem>
               ))}
-            </Accordion>
+                </Accordion>
+              </div>
+            </div>
           </TabsContent>
         </Tabs>
       </div>
@@ -7660,7 +7907,7 @@ export default function Studio() {
               <Button variant="outline" onClick={() => bus.publish("dialog.open", { title: "预览弹框", content: "这是预览中的弹框" })}>预览弹框</Button>
             )}
             <Button variant="secondary" onClick={goRun}>新窗口预览</Button>
-            <Button variant={showPreview ? "outline" : "default"} onClick={() => setShowPreview((v) => !v)}>{showPreview ? "关闭预览" : "打开预览"}</Button>
+            {/* <Button variant={showPreview ? "outline" : "default"} onClick={() => setShowPreview((v) => !v)}>{showPreview ? "关闭预览" : "打开预览"}</Button> */}
           </div>
         </div>
         {showPreview ? (
@@ -7681,22 +7928,21 @@ export default function Studio() {
             />
           </div>
         ) : (
-          <div className="flex-1 min-h-0 overflow-hidden" onKeyDown={handleDesignPanelKeyDown} tabIndex={-1}>
-            <div className="h-full w-full bg-background flex flex-col">
-              <Canvas page={page} setPage={commit} select={selectedId} setSelect={setSelectedId} insertSibling={insertSibling} moveBeforeAfter={moveBeforeAfter} moveAsChild={moveAsChild} onPanelSizeChange={onPanelSizeChange} onCopy={handleContextCopy} onPaste={handleContextPaste} onDelete={handleContextDelete} onDuplicate={handleContextDuplicate} />
-            </div>
+          <div className="flex-1 min-h-0" onKeyDown={handleDesignPanelKeyDown} tabIndex={-1}>
+            <Canvas page={page} setPage={commit} select={selectedId} setSelect={setSelectedId} insertSibling={insertSibling} moveBeforeAfter={moveBeforeAfter} moveAsChild={moveAsChild} onPanelSizeChange={onPanelSizeChange} onCopy={handleContextCopy} onPaste={handleContextPaste} onDelete={handleContextDelete} onDuplicate={handleContextDuplicate} />
           </div>
         )}
       </div>
-      <div className="border-l">
-        <Tabs defaultValue="props">
-          <TabsList className="m-3">
+      <div className="border-l h-full flex flex-col">
+        <Tabs defaultValue="props" className="h-full flex flex-col">
+          <TabsList className="m-3 flex-shrink-0">
             <TabsTrigger value="props">属性</TabsTrigger>
             <TabsTrigger value="events">事件</TabsTrigger>
             <TabsTrigger value="page">页面</TabsTrigger>
           </TabsList>
-          <TabsContent value="props">
-            <Inspector
+          <TabsContent value="props" className="flex-1 min-h-0 ">
+            <div className="h-full overflow-y-auto">
+              <Inspector
               selected={selected}
               update={updateNode}
               onCopy={onCopy}
@@ -7706,7 +7952,7 @@ export default function Studio() {
               containers={useMemo(() => {
                 const list: { id: string; label: string }[] = [];
                 const walk = (n: NodeMeta) => {
-                  if (n.type === "Container") list.push({ id: n.id, label: `${n.type} · ${n.id.slice(0, 6)}` });
+                  if (containerTypes.includes(n.type)) list.push({ id: n.id, label: `${n.type} · ${n.id.slice(0, 6)}` });
                   n.children?.forEach(walk);
                 };
                 walk(page.root);
@@ -7760,15 +8006,19 @@ export default function Studio() {
                 commit(updatedPage);
               }}
             />
+            </div>
           </TabsContent>
-          <TabsContent value="events">
-            <EventsPanel
-              selected={selected}
-              update={updateNode}
-            />
+          <TabsContent value="events" className="flex-1 min-h-0 ">
+            <div className="h-full overflow-y-auto">
+              <EventsPanel
+                selected={selected}
+                update={updateNode}
+              />
+            </div>
           </TabsContent>
-          <TabsContent value="page">
-            <div className="space-y-3 p-4">
+          <TabsContent value="page" className="flex-1 min-h-0 px-3 pb-3">
+            <div className="h-full overflow-y-auto">
+              <div className="space-y-3">
               <label className="text-xs">页面名称</label>
               <Input value={page.name} onChange={(e) => commit({ ...page, name: e.target.value, updatedAt: Date.now() })} />
               <div className="text-xs text-muted-foreground">模板：{page.template}</div>
@@ -7848,6 +8098,7 @@ export default function Studio() {
                 添加默认间距
               </Button>
             </div>
+          </div>
           </TabsContent>
         </Tabs>
       </div>

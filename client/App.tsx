@@ -1,4 +1,6 @@
 import "./global.css";
+// 导入主题预加载器，确保主题在应用启动时立即加载
+import "@/studio/theme-preloader";
 
 import { Toaster } from "@/components/ui/toaster";
 import { createRoot } from "react-dom/client";
@@ -51,9 +53,9 @@ const App = () => (
           
           {/* 其他页面包含头部和布局 */}
           <Route path="/*" element={
-            <div className="flex min-h-screen h-full flex-col">
+            <div className="flex h-screen flex-col overflow-hidden">
               <Header />
-              <main className="flex-1 min-h-0">
+              <main className="flex-1 min-h-0 overflow-hidden">
                 <Routes>
                   <Route path="/" element={<Index />} />
                   <Route path="/guide" element={<Guide />} />

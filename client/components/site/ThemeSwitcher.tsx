@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
-import { applyTheme, getSavedThemeId } from "@/lib/theme";
-import { themes, getThemeById } from "@/theme/themes";
+import { useMemo } from "react";
+import { useTheme } from "@/hooks/use-theme";
+import { themes } from "@/theme/themes";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,7 +10,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 export default function ThemeSwitcher() {
-  const [themeId, setThemeId] = useState<string | null>(null);
+  const { themeId, currentTheme, switchTheme, isLoading, preloadThemes } = useTheme();
+  
   const grouped = useMemo(() => {
     return {
       basic: themes.filter((t) => t.id === "white" || t.id === "black"),
@@ -19,19 +20,27 @@ export default function ThemeSwitcher() {
     };
   }, []);
 
-  useEffect(() => {
-    const saved = getSavedThemeId();
-    const th = getThemeById(saved);
-    setThemeId(th.id);
-    applyTheme(th);
-  }, []);
-
-  const onPick = (id: string) => {
-    setThemeId(id);
-    applyTheme(getThemeById(id));
+  // 预加载当前分组的主题
+  const preloadGroupThemes = (group: typeof grouped.basic) => {
+    const ids = group.map(t => t.id);
+    preloadThemes(ids);
   };
 
-  const current = getThemeById(themeId);
+  const onPick = (id: string) => {
+    switchTheme(id);
+  };
+
+  // 如果主题还在加载中，显示占位符
+  if (isLoading) {
+    return (
+      <div className="inline-flex items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm shadow-sm">
+        <div className="h-4 w-4 bg-muted animate-pulse rounded" />
+        <span className="hidden sm:inline text-muted-foreground">加载中...</span>
+      </div>
+    );
+  }
+
+  const current = currentTheme;
 
   return (
     <DropdownMenu>
@@ -52,7 +61,10 @@ export default function ThemeSwitcher() {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-72 p-3">
         <DropdownMenuLabel>基础</DropdownMenuLabel>
-        <div className="grid grid-cols-6 gap-2">
+        <div 
+          className="grid grid-cols-6 gap-2"
+          onMouseEnter={() => preloadGroupThemes(grouped.basic)}
+        >
           {grouped.basic.map((t) => (
             <button
               key={t.id}
@@ -70,7 +82,10 @@ export default function ThemeSwitcher() {
         </div>
         <DropdownMenuSeparator />
         <DropdownMenuLabel>亮色</DropdownMenuLabel>
-        <div className="grid grid-cols-6 gap-2">
+        <div 
+          className="grid grid-cols-6 gap-2"
+          onMouseEnter={() => preloadGroupThemes(grouped.light)}
+        >
           {grouped.light.map((t) => (
             <button
               key={t.id}
@@ -88,7 +103,10 @@ export default function ThemeSwitcher() {
         </div>
         <DropdownMenuSeparator />
         <DropdownMenuLabel>暗色</DropdownMenuLabel>
-        <div className="grid grid-cols-6 gap-2">
+        <div 
+          className="grid grid-cols-6 gap-2"
+          onMouseEnter={() => preloadGroupThemes(grouped.dark)}
+        >
           {grouped.dark.map((t) => (
             <button
               key={t.id}

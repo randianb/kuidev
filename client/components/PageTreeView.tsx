@@ -95,7 +95,7 @@ export function PageTreeView({
     return (
       <div
         key={page.id}
-        className={`ml-6 p-3 border rounded-lg cursor-pointer transition-all ${
+        className={`ml-6 p-3 border rounded-lg cursor-pointer transition-all relative group ${
           isSelected
             ? 'border-blue-500 bg-blue-50'
             : isCurrent
@@ -105,64 +105,50 @@ export function PageTreeView({
         onClick={() => onPageSelect(page)}
         onMouseEnter={() => onPagePreload(page.id)}
       >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2 flex-1">
-            <FileText className="w-4 h-4 text-gray-500" />
-            <span className="font-medium text-sm">{page.name}</span>
-            {page.template && (
-              <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                {page.template}
-              </span>
-            )}
-          </div>
-          <div className="flex items-center space-x-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={(e) => {
-                e.stopPropagation();
-                onPageFocus(page.id);
-              }}
-              className="h-6 w-6 p-0"
-            >
-              <span className="text-xs">👁</span>
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={(e) => {
-                e.stopPropagation();
-                onPageCopy(page);
-              }}
-              className="h-6 w-6 p-0"
-            >
-              <Copy className="w-3 h-3" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={(e) => {
-                e.stopPropagation();
-                navigateToPage(page.id);
-              }}
-              className="h-6 w-6 p-0 text-blue-500 hover:text-blue-700"
-              title="使用事件导航到此页面"
-            >
-              <Navigation className="w-3 h-3" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={(e) => {
-                e.stopPropagation();
-                onPageDelete(page);
-              }}
-              className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
-            >
-              <X className="w-3 h-3" />
-            </Button>
-          </div>
+        <div className="flex items-center space-x-2 min-w-0">
+          <FileText className="w-4 h-4 text-gray-500 flex-shrink-0" />
+          <span 
+            className="font-medium text-sm truncate flex-1 min-w-0" 
+            title={page.name}
+          >
+            {page.name}
+          </span>
+          {page.template && (
+            <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded flex-shrink-0 whitespace-nowrap">
+              {page.template}
+            </span>
+          )}
         </div>
+        
+        {/* 悬停时显示的浮动按钮 */}
+        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center space-x-1 bg-white rounded-md shadow-sm border border-gray-200 p-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              onPageCopy(page);
+            }}
+            className="h-6 w-6 p-0 hover:bg-gray-100"
+            title="复制页面"
+          >
+            <Copy className="w-3 h-3" />
+          </Button>
+          
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              onPageDelete(page);
+            }}
+            className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+            title="删除页面"
+          >
+            <X className="w-3 h-3" />
+          </Button>
+        </div>
+        
         {page.updatedAt && (
           <div className="text-xs text-gray-400 mt-1">
             更新于 {new Date(page.updatedAt).toLocaleString()}

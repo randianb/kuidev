@@ -56,7 +56,8 @@ export type ComponentType =
   | "FormLabel"
   | "SubmitButton"
   | "ScriptEditor"
-  | "EventListener";
+  | "EventListener"
+  | "NavigationControls";
 
 // Tailwind CSS 间距值类型
 export type SpacingValue = "0" | "px" | "0.5" | "1" | "1.5" | "2" | "2.5" | "3" | "3.5" | "4" | "5" | "6" | "7" | "8" | "9" | "10" | "11" | "12" | "14" | "16" | "20" | "24" | "28" | "32" | "36" | "40" | "44" | "48" | "52" | "56" | "60" | "64" | "72" | "80" | "96";
@@ -196,7 +197,7 @@ export function createPage(name: string, template: TemplateKind): PageMeta {
   if (template === "content") {
     root.layout = "col";
     root.children = [
-      createNode("Container", { props: { title: "内容头部", className: "h-[60px] min-h-[60px]" }, layout: "row" }),
+      createNode("Container", { props: { title: "内容头部", className: "h-[64px] min-h-[64px]" }, layout: "row" }),
       createNode("Container", { props: { title: "内容主体" }, layout: "col" }),
     ];
   } else if (template === "vscode") {
@@ -258,7 +259,7 @@ export function createPage(name: string, template: TemplateKind): PageMeta {
   } else if (template === "landing") {
     root.layout = "col";
     root.children = [
-      createNode("Container", { props: { title: "头部", className: "h-[60px] min-h-[60px] flex-shrink-0" } }),
+      createNode("Container", { props: { title: "头部", className: "h-[64px] min-h-[64px] flex-shrink-0" } }),
       createNode("Container", { props: { title: "主体", className: "flex-1 min-h-0" } }),
     ];
   } else if (template === "email") {
@@ -270,13 +271,13 @@ export function createPage(name: string, template: TemplateKind): PageMeta {
   } else if (template === "home") {
     root.layout = "col";
     root.children = [
-      createNode("Container", { props: { title: "顶部 Banner", className: "h-[60px] min-h-[60px]" } }),
+      createNode("Container", { props: { title: "顶部 Banner", className: "h-[64px] min-h-[64px]" } }),
       createNode("Container", { props: { title: "主页内容" } }),
     ];
   } else if (template === "admin") {
     root.layout = "col";
     root.children = [
-      createNode("Container", { props: { title: "顶部导航", className: "h-[60px] min-h-[60px]" } }),
+      createNode("Container", { props: { title: "顶部导航", className: "h-[64px] min-h-[64px]" } }),
       createNode("Container", {
         layout: "row",
         children: [
@@ -306,7 +307,7 @@ export function createPage(name: string, template: TemplateKind): PageMeta {
   } else if (template === "dashboard") {
     root.layout = "col";
     root.children = [
-      createNode("Container", { props: { title: "顶部导航", className: "h-[60px] min-h-[60px]" } }),
+      createNode("Container", { props: { title: "顶部导航", className: "h-[64px] min-h-[64px]" } }),
       createNode("Grid", {
         props: { 
           title: "仪表板内容", 

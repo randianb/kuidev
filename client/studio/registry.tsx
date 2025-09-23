@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -44,11 +45,17 @@ import {
   Info, AlertTriangle, XCircle, CheckCircle, Loader2
 } from "lucide-react";
 import ThemeSwitcher from "@/components/site/ThemeSwitcher";
+import NavigationControls from "../components/NavigationControls";
 import { cn } from "@/lib/utils";
 import { bus } from "@/lib/eventBus";
 import { execHandler } from "@/lib/handlers";
 import { formValidationManager } from "./form-validation";
 import { getPage } from "./storage";
+import { getCachedPage } from "./page-cache";
+import { getPageFast } from "./page-metadata-manager";
+import { usePageData } from "./hooks/use-page-data";
+import { PageContentWrapper } from "./components/animated-page-container";
+import { pagePreloader } from "./page-preloader";
 import type { NodeMeta, PageMeta } from "./types";
 import { getSpacingClasses, getDefaultSpacing, mergeSpacingConfig } from "./utils/spacing";
 
@@ -84,65 +91,35 @@ function PageNodeRenderer({ node, ctx }: { node: NodeMeta; ctx: any }): JSX.Elem
 }
 
 function PageContentRenderer({ pageId, ctx }: { pageId: string; ctx: any }) {
-  const [pageData, setPageData] = useState<PageMeta | null>(null);
-  const [loading, setLoading] = useState(true);
+  // 使用优化的页面数据获取 Hook，启用预加载
+  const { pageData, loading, error } = usePageData(pageId, { preload: true });
 
-  useEffect(() => {
-    const loadPageData = () => {
-      try {
-        const page = getPage(pageId);
-        setPageData(page);
-      } catch (error) {
-        console.error('Failed to load page:', error);
-        setPageData(null);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadPageData();
-  }, [pageId]);
-
-  if (loading) {
-    return (
-      <div className="nested-page-content w-full h-full">
-        <div className="flex items-center justify-center p-4">
-          <div className="text-sm text-gray-500">加载页面中...</div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!pageData) {
-    return (
-      <div className="nested-page-content w-full h-full">
-        <div className="flex items-center justify-center p-4 border-2 border-dashed border-red-300 rounded bg-red-50">
-          <div className="text-center text-red-600">
-            <div className="text-sm font-medium">页面未找到</div>
-            <div className="text-xs mt-1">页面ID: {pageId}</div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!pageData.root) {
-    return (
-      <div className="nested-page-content w-full h-full">
+  // 使用动画容器包装内容
+  return (
+    <PageContentWrapper
+      pageId={pageId}
+      loading={loading}
+      error={error}
+    >
+      {pageData?.root ? (
+        <PageNodeRenderer node={pageData.root} ctx={{
+          ...ctx,
+          design: false, // 嵌套页面不显示设计模式
+          onSelect: undefined, // 禁用选择功能
+        }} />
+      ) : loading || !pageData ? (
+        // 加载期间或没有数据时显示占位内容，避免显示"页面内容为空"
+        <div className="w-full h-full min-h-[200px]" />
+      ) : (
+        // 只有在确实有页面数据但没有root时才显示空内容提示
         <div className="flex items-center justify-center p-4 text-gray-500">
           <div className="text-center">
             <div className="text-sm">页面内容为空</div>
             <div className="text-xs mt-1">页面: {pageData.name}</div>
           </div>
         </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="nested-page-content w-full h-full">
-      <PageNodeRenderer node={pageData.root} ctx={ctx} />
-    </div>
+      )}
+    </PageContentWrapper>
   );
 }
 
@@ -207,7 +184,7 @@ export const registry: Record<string, Renderer> = {
     return (
       <div
         className={cn(
-          "relative rounded-md border border-dashed p-3",
+          "relative rounded-md border border-dashed p-3 h-full",
           ctx.design ? "hover:border-ring" : "border-transparent p-0",
           "grid",
           `grid-cols-${cols}`,
@@ -290,7 +267,7 @@ export const registry: Record<string, Renderer> = {
         )}
         
         {!shouldRenderData && !node.children?.length && (
-          <div className="col-span-full flex items-center justify-center min-h-[120px]">
+          <div className="col-span-full flex items-center justify-center h-full">
             <div className="pointer-events-none select-none text-center text-xs text-muted-foreground py-10">
               空栅格，点击"+项"添加栅格项
             </div>
@@ -311,7 +288,7 @@ export const registry: Record<string, Renderer> = {
     return (
       <div
         className={cn(
-          "relative rounded-md border border-dashed p-3",
+          "relative rounded-md border border-dashed p-3 h-full",
           ctx.design ? "hover:border-ring" : "border-transparent p-0",
           `col-span-${span}`,
           offset > 0 && `col-start-${offset + 1}`,
@@ -370,7 +347,7 @@ export const registry: Record<string, Renderer> = {
         ))}
         
         {!node.children?.length && (
-          <div className="flex items-center justify-center min-h-[80px]">
+          <div className="flex items-center justify-center h-full">
             <div className="pointer-events-none select-none text-center text-xs text-muted-foreground py-6">
               栅格项 (span: {span})
             </div>
@@ -491,8 +468,8 @@ export const registry: Record<string, Renderer> = {
       }}
 
       className={cn(
-        "relative",
-        ctx.design ? "rounded-md border border-dashed p-3 hover:border-ring" : "border-transparent p-0 h-full",
+        "relative w-full h-full ",
+        ctx.design ? "rounded-md border border-dashed p-3 hover:border-ring" : "border-transparent p-0",
         node.props?.className,
       )}
       data-node-id={node.id}
@@ -677,7 +654,7 @@ export const registry: Record<string, Renderer> = {
         (node.children?.length ?? 0) > 0 ? (
           <ResizablePanelGroup 
             direction="horizontal" 
-            className="min-h-[240px]"
+            className="h-full"
             onLayout={(sizes) => {
               // 保存分栏大小变化到节点数据中
               if (ctx.onPanelSizeChange) {
@@ -716,8 +693,7 @@ export const registry: Record<string, Renderer> = {
           </ResizablePanelGroup>
         ) : (
           <div className={cn(
-            "flex items-center justify-center",
-            ctx.design ? "min-h-[240px]" : "h-full"
+            "flex items-center justify-center h-full"
           )}>
             {ctx.design && (
               <div className="pointer-events-none select-none text-center text-xs text-muted-foreground w-full py-10">
@@ -728,10 +704,7 @@ export const registry: Record<string, Renderer> = {
         )
       ) : node.layout === "grid" ? (
         <div 
-          className={cn(
-            "w-full",
-            ctx.design ? "min-h-[240px]" : "h-full"
-          )}
+          className="w-full h-full"
           style={{
             display: "grid",
             gridTemplateColumns: `repeat(${node.gridCols || 3}, 1fr)`,
@@ -762,7 +735,7 @@ export const registry: Record<string, Renderer> = {
             node.alignItems === "center" ? "items-center" :
             node.alignItems === "end" ? "items-end" :
             node.alignItems === "stretch" ? "items-stretch" : "",
-          ctx.design ? "min-h-[240px]" : "h-full"
+          "w-full h-full"
         )}>
           {(node.children ?? []).map((child) => (
             <div key={child.id} className={cn(
@@ -1330,7 +1303,7 @@ export const registry: Record<string, Renderer> = {
              ))}
            </TabsList>
            {tabs.map((tab: any) => (
-             <TabsContent key={tab.value} value={tab.value} className="flex-1 min-h-0 overflow-auto mt-4">
+             <TabsContent key={tab.value} value={tab.value} className="mt-4">
                {tab.pageId ? (
                  <div className="h-full flex flex-col">
                    {ctx.design && (
@@ -1338,7 +1311,7 @@ export const registry: Record<string, Renderer> = {
                        绑定页面: {tab.pageId}
                      </div>
                    )}
-                   <div className="flex-1 min-h-0 overflow-auto">
+                   <div className="flex-1">
                      <PageContentRenderer pageId={tab.pageId} ctx={ctx} />
                    </div>
                  </div>
@@ -1349,7 +1322,7 @@ export const registry: Record<string, Renderer> = {
                        嵌套页面容器
                      </div>
                    )}
-                   <div className="flex-1 min-h-0 overflow-auto p-6">
+                   <div className="flex-1 p-6">
                      {/* 空容器，可以拖拽组件进来 */}
                      <div className="h-full border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center">
                        <div className="text-center text-gray-500">
@@ -1387,44 +1360,108 @@ export const registry: Record<string, Renderer> = {
      },
      NestedPageContainer: (node, ctx) => {
        const pageId = node.props?.pageId;
+       
+       // 在设计模式下也显示真实页面内容
+       if (ctx.design) {
+         const containerStyle = {
+           padding: node.props?.padding || "0",
+           margin: node.props?.margin || "0",
+           backgroundColor: node.props?.backgroundColor || "transparent",
+           border: node.props?.border || "1px solid #e5e7eb",
+           borderRadius: node.props?.borderRadius || "8px",
+           ...node.props?.style
+         };
+
+         // 如果没有pageId，显示占位符
+         if (!pageId) {
+           return (
+             <div 
+               className={cn("nested-page-container w-full h-full ", node.props?.className)}
+               style={containerStyle}
+               onClick={(e) => {
+                 e.stopPropagation();
+                 ctx.onSelect?.(node.id);
+               }}
+             >
+               <div className="w-full h-full flex items-center justify-center border-2 border-dashed border-gray-300 rounded p-4 ">
+                 <div className="text-center text-gray-500">
+                   <div className="text-sm">嵌套页面容器</div>
+                   <div className="text-xs mt-1">请在属性面板中绑定页面</div>
+                 </div>
+               </div>
+             </div>
+           );
+         }
+
+         // 有pageId时，显示真实页面内容
+         return (
+           <div 
+             className={cn("nested-page-container w-full h-full relative", node.props?.className)}
+             style={containerStyle}
+             onClick={(e) => {
+               e.stopPropagation();
+               ctx.onSelect?.(node.id);
+             }}
+           >
+             {/* 设计模式下显示真实页面内容 */}
+             <PageContentRenderer pageId={pageId} ctx={{
+               ...ctx,
+               design: true, // 保持设计模式
+             }} />
+             
+             {/* 设计模式下的标识标签 */}
+             <div className="absolute top-1 left-1 bg-blue-500 text-white text-xs px-2 py-1 rounded z-10">
+               嵌套页面: {pageId.slice(0, 8)}...
+             </div>
+           </div>
+         );
+       }
+
+       // 运行时模式：如果没有pageId，显示空状态
+       if (!pageId) {
+         const containerStyle = {
+           padding: node.props?.padding || "16px",
+           margin: node.props?.margin || "0",
+           backgroundColor: node.props?.backgroundColor || "transparent",
+           border: node.props?.border || "1px solid #e5e7eb",
+           borderRadius: node.props?.borderRadius || "8px",
+           ...node.props?.style
+         };
+
+         return (
+           <div 
+             className={cn("nested-page-container w-full h-full flex items-center justify-center", node.props?.className)}
+             style={containerStyle}
+           >
+             <div className="text-center text-gray-500">
+               <div className="text-sm">嵌套页面容器</div>
+               <div className="text-xs mt-1">请配置页面ID</div>
+             </div>
+           </div>
+         );
+       }
+
+       // 运行时模式：简洁显示页面内容
        const containerStyle = {
          padding: node.props?.padding || "0",
          margin: node.props?.margin || "0",
          backgroundColor: node.props?.backgroundColor || "transparent",
-         border: node.props?.border || "1px solid #e5e7eb",
-         borderRadius: node.props?.borderRadius || "8px",
-         minHeight: node.props?.minHeight || "200px",
+         border: node.props?.border || "none",
+         borderRadius: node.props?.borderRadius || "0",
          ...node.props?.style
        };
 
        return (
          <div 
-           className={cn("nested-page-container", node.props?.className)}
+           className={cn("nested-page-container w-full h-full", node.props?.className)}
            style={containerStyle}
-           onClick={(e) => {
-             e.stopPropagation();
-             ctx.onSelect?.(node.id);
-           }}
          >
-           {pageId ? (
-             <div className="h-full">
-               {ctx.design && (
-                 <div className="text-xs text-gray-500 mb-2 px-2 py-1 bg-blue-50 rounded">
-                   嵌套页面: {pageId}
-                 </div>
-               )}
-               <div className={cn("h-full min-h-[150px] overflow-hidden", ctx.design ? "border rounded" : "")}>
-                 <PageContentRenderer pageId={pageId} ctx={ctx} />
-               </div>
-             </div>
-           ) : (
-             <div className="h-full flex items-center justify-center border-2 border-dashed border-gray-300 rounded">
-               <div className="text-center text-gray-500">
-                 <div className="text-sm">嵌套页面容器</div>
-                 <div className="text-xs mt-1">请在属性面板中绑定页面</div>
-               </div>
-             </div>
-           )}
+           {/* 页面内容在原位置正常显示 */}
+           <PageContentRenderer pageId={pageId} ctx={{
+             ...ctx,
+             design: false, // 嵌套页面不显示设计模式
+             onSelect: undefined, // 禁用选择功能
+           }} />
          </div>
        );
      },
@@ -2897,15 +2934,26 @@ export const registry: Record<string, Renderer> = {
       };
 
       return (
-        <header className={cn(
-          "sticky top-0 z-30 w-full border-b bg-background/70 backdrop-blur supports-[backdrop-filter]:bg-background/50",
-          node.props?.sticky === false && "relative",
-          node.props?.className
-        )}>
-          <div className={cn(
-            "container mx-auto flex items-center justify-between px-4",
-            `h-${node.props?.height || 16}`
-          )}>
+        <header 
+          className={cn(
+            "sticky top-0 z-30 w-full border-b bg-background/70 backdrop-blur supports-[backdrop-filter]:bg-background/50",
+            node.props?.sticky === false && "relative",
+            node.props?.className
+          )}
+          style={{
+            padding: node.props?.removePadding ? '0' : undefined
+          }}
+        >
+          <div 
+            className={cn(
+              "w-full max-w-7xl mx-auto flex items-center justify-between",
+              !node.props?.removePadding && "px-4"
+            )}
+            style={{ 
+              height: `${(node.props?.height || 16) * 4}px`, // 转换为像素值，16 = 64px
+              padding: node.props?.removePadding ? '0' : undefined
+            }}
+          >
             {/* Logo 区域 */}
             <div 
               className="flex items-center gap-2 cursor-pointer"
@@ -2913,21 +2961,25 @@ export const registry: Record<string, Renderer> = {
             >
               {node.props?.showLogo !== false && (
                 <span 
-                  className={cn(
-                    "inline-block rounded",
-                    `h-${node.props?.logoSize || 6}`,
-                    `w-${node.props?.logoSize || 6}`
-                  )}
+                  className="inline-block rounded"
                   style={{ 
-                    background: node.props?.logoColor || `hsl(var(--primary))` 
+                    background: node.props?.logoColor || `hsl(var(--primary))`,
+                    height: `${(node.props?.logoSize || 6) * 4}px`, // 转换为像素值
+                    width: `${(node.props?.logoSize || 6) * 4}px`
                   }} 
                 />
               )}
               {node.props?.showTitle !== false && (
-                <span className={cn(
-                  "font-extrabold text-foreground",
-                  `text-${node.props?.titleSize || 'xl'}`
-                )}>
+                <span 
+                  className="font-extrabold text-foreground"
+                  style={{
+                    fontSize: node.props?.titleSize === 'sm' ? '14px' :
+                             node.props?.titleSize === 'base' ? '16px' :
+                             node.props?.titleSize === 'lg' ? '18px' :
+                             node.props?.titleSize === 'xl' ? '20px' :
+                             node.props?.titleSize === '2xl' ? '24px' : '20px'
+                  }}
+                >
                   {node.props?.title || "代码优化建议"}
                 </span>
               )}
@@ -2979,15 +3031,36 @@ export const registry: Record<string, Renderer> = {
         </header>
       );
     },
+    NavigationControls: (node, ctx) => (
+      <NavigationControls
+        className={node.props?.className}
+        showBackButton={node.props?.showBackButton ?? true}
+        showForwardButton={node.props?.showForwardButton ?? true}
+        showHistoryButton={node.props?.showHistoryButton ?? true}
+        buttonSize={node.props?.buttonSize || 'md'}
+        variant={node.props?.variant || 'default'}
+        layout={node.props?.layout || 'row'}
+        gap={node.props?.gap || 'sm'}
+        justify={node.props?.justify || 'start'}
+        align={node.props?.align || 'center'}
+      >
+        {node.children?.map((child) => (
+          <NodeRenderer key={child.id} node={child} ctx={ctx} />
+        ))}
+      </NavigationControls>
+    ),
 };
 
 export function NodeRenderer({ node, ctx }: { node: NodeMeta; ctx: any }) {
-  const Comp = registry[node.type];
   // 确保hooks在所有渲染路径中都被调用
   const [over, setOver] = useState(false);
   
-  if (!Comp) return <div>未知组件: {node.type}</div>;
+  // 在hooks调用之后进行条件检查
+  if (!registry[node.type]) return <div>未知组件: {node.type}</div>;
+  
+  const Comp = registry[node.type];
 
+  // 如果不是设计模式，渲染简化版本
   if (!ctx?.design) {
     // 获取间距样式类名
     const spacingClasses = getSpacingClasses(node.margin, node.padding);
@@ -3008,7 +3081,7 @@ export function NodeRenderer({ node, ctx }: { node: NodeMeta; ctx: any }) {
   }
 
   // Design mode wrapper: selection, drag, drop-before/after
-  const droppable = node.type === "Container" || node.type === "Card" || node.type === "CollapsibleCard" || node.type === "ActionCard" || node.type === "InfoCard" || node.type === "StatsCard";
+  const droppable = node.type === "Container" || node.type === "Card" || node.type === "CollapsibleCard" || node.type === "ActionCard" || node.type === "InfoCard" || node.type === "StatsCard" || node.type === "NavigationControls";
   
   const handleDragStart = (e: React.DragEvent) => {
     // 阻止事件冒泡，确保只有被直接拖拽的组件触发拖拽事件

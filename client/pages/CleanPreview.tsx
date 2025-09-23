@@ -6,6 +6,8 @@ import { execHandler } from "@/lib/handlers";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PageMeta, getPageRoots } from "@/studio/types";
 
+import navigationHistory from "@/lib/navigation-history";
+
 // 自定义预览弹框组件，解决样式问题
 function PreviewDialog({ open, onOpenChange, title, content }: {
   open: boolean;
@@ -195,6 +197,13 @@ export default function RuntimePreview({ pageData, pageId }: RuntimePreviewProps
     return () => unsub();
   }, [page?.id, page?.root?.code]);
 
+  // 初始化当前页面到历史记录
+  useEffect(() => {
+    if (page?.id && !initialLoading) {
+      navigationHistory.initializeCurrentPage(page.id, page.name);
+    }
+  }, [page?.id, page?.name, initialLoading]);
+
   // 显示初始加载状态
   if (initialLoading) {
     return (
@@ -227,8 +236,9 @@ export default function RuntimePreview({ pageData, pageId }: RuntimePreviewProps
   const roots = getPageRoots(page);
   
   return (
-    <div className="h-screen w-screen">
-      <div className="h-full w-full">
+    <div className="h-screen w-screen flex flex-col">
+      {/* 页面内容 */}
+      <div className="flex-1 overflow-auto">
         {roots.map((root) => (
           <NodeRenderer key={root.id} node={root} ctx={{}} />
         ))}

@@ -29,19 +29,19 @@
     if (template === "landing") {
       root.layout = "col";
       root.children = [
-        createNode("Container", { props: { title: "头部", className: "h-[60px] min-h-[60px] flex-shrink-0" } }),
+        createNode("Container", { props: { title: "头部", className: "h-[64px] min-h-[64px] flex-shrink-0" } }),
         createNode("Container", { props: { title: "主体", className: "flex-1 min-h-0" } }),
       ];
     } else if (template === "content") {
       root.layout = "col";
       root.children = [
-        createNode("Container", { props: { title: "内容头部", className: "h-[60px] min-h-[60px]" }, layout: "row" }),
+        createNode("Container", { props: { title: "内容头部", className: "h-[64px] min-h-[64px]" }, layout: "row" }),
         createNode("Container", { props: { title: "内容主体" }, layout: "col" }),
       ];
     } else if (template === "dashboard") {
       root.layout = "col";
       root.children = [
-        createNode("Container", { props: { title: "顶部导航", className: "h-[60px] min-h-[60px]" } }),
+        createNode("Container", { props: { title: "顶部导航", className: "h-[64px] min-h-[64px]" } }),
         createNode("Grid", {
           props: { 
             title: "仪表板内容", 
@@ -62,7 +62,7 @@
     } else if (template === "admin") {
       root.layout = "col";
       root.children = [
-        createNode("Container", { props: { title: "顶部导航", className: "h-[60px] min-h-[60px]" } }),
+        createNode("Container", { props: { title: "顶部导航", className: "h-[64px] min-h-[64px]" } }),
         createNode("Container", {
           layout: "row",
           children: [
