@@ -261,11 +261,11 @@ if (payload && payload.elementId) {
       </CardHeader>
       <CardContent>
         <Tabs defaultValue="config" className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="config">配置</TabsTrigger>
-            <TabsTrigger value="script">脚本</TabsTrigger>
-            <TabsTrigger value="output">输出</TabsTrigger>
-            <TabsTrigger value="events">事件</TabsTrigger>
+          <TabsList className="w-full">
+            <TabsTrigger value="config" className="flex-shrink-0">配置</TabsTrigger>
+            <TabsTrigger value="script" className="flex-shrink-0">脚本</TabsTrigger>
+            <TabsTrigger value="output" className="flex-shrink-0">输出</TabsTrigger>
+            <TabsTrigger value="events" className="flex-shrink-0">事件</TabsTrigger>
           </TabsList>
           
           <TabsContent value="config" className="space-y-4">

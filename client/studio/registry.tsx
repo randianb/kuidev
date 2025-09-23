@@ -480,7 +480,7 @@ export const registry: Record<string, Renderer> = {
     >
       {ctx.design && ctx.selectedId === node.id && !node.locked && !(ctx.rootNode && isNodeInLockedContainer(node.id, ctx.rootNode)) && (
         <div className="pointer-events-auto">
-          <div className="absolute inset-0 rounded-md ring-2 ring-blue-500/60 pointer-events-none" />
+          <div className="absolute inset-0 rounded-md  ring-blue-500/60 pointer-events-none" />
           {/* 根据布局方向显示不同的添加按钮 */}
           {node.layout === "grid" ? (
             // Grid布局：中心添加按钮用于添加子元素，四周按钮用于插入兄弟元素
@@ -3367,7 +3367,7 @@ export function NodeRenderer({ node, ctx }: { node: NodeMeta; ctx: any }) {
             "relative",
             node.type === "Container" ? "h-full" : "",
             ctx.selectedId === node.id && "ring-2 ring-blue-500/60 rounded",
-            droppable && over && "ring-2 ring-ring/60 rounded bg-accent/10",
+            droppable && over && "ring-ring/60 rounded bg-accent/10",
             getSpacingClasses(node.margin, node.padding),
             node.props?.className,
           )}

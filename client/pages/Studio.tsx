@@ -41,7 +41,7 @@ function MultiRootRenderer({
   return (
     <div className="h-full flex flex-col space-y-4">
       {roots.map((root, index) => (
-        <div key={root.id} className={`relative ${roots.length === 1 ? 'h-full' : 'flex-1 min-h-0'}`}>
+        <div key={root.id} className="relative flex-1 min-h-0">
           {roots.length > 1 && (
             <div className="absolute -top-2 -left-2 z-10 bg-blue-500 text-white text-xs px-2 py-1 rounded">
               根节点 {index + 1}
@@ -129,7 +129,7 @@ function Canvas({
   };
 
   return (
-    <div className="h-full">
+    <div className="h-full overflow-hidden">
       <div className="h-full">
         <MultiRootRenderer
           page={page}
@@ -243,7 +243,7 @@ function SplitPreview({
   return (
     <ResizablePanelGroup direction="horizontal">
       <ResizablePanel defaultSize={55} minSize={30}>
-        <div className="h-full">
+        <div className="h-full overflow-hidden">
           <div className="h-full w-full bg-background flex flex-col" style={{ width }}>
             <div className={`h-full overflow-y-auto overflow-x-hidden ${hasRemovePaddingComponent ? '' : 'p-2'}`}>
               <NodeRenderer
@@ -271,7 +271,7 @@ function SplitPreview({
       </ResizablePanel>
       <ResizableHandle withHandle />
       <ResizablePanel defaultSize={45} minSize={30}>
-        <div className="h-full">
+        <div className="h-full overflow-hidden">
           <div className="mx-auto h-full w-full max-w-full rounded border bg-background shadow-sm flex flex-col" style={{ width, overflow: "hidden" }}>
             <div className={`border-b text-xs text-muted-foreground ${hasRemovePaddingComponent ? 'p-1' : 'p-2'}`}>预览</div>
             <div className="flex-1 overflow-auto">
@@ -2849,7 +2849,7 @@ function Inspector({
   };
 
   return (
-    <div className="h-full flex flex-col p-4">
+    <div className="h-full flex flex-col pl-4">
       <div className="flex gap-2 flex-shrink-0 mb-3">
         <Button size="sm" onClick={() => onCopy(local!)}>
           复制
@@ -7189,35 +7189,25 @@ export default function Studio() {
     const onKey = (e: KeyboardEvent) => {
       // 检查是否在设计区域（中间面板）
       const target = e.target as HTMLElement;
-      const designArea = target.closest('[data-design-canvas="true"]') || 
-                        target.closest('.h-full[tabindex="-1"]') ||
-                        target.closest('.grid.h-\\[calc\\(100vh-4rem\\)\\].grid-cols-\\[260px_1fr_300px\\] > div:nth-child(2)');
+      const designArea = target.closest('.grid.h-\\[calc\\(100vh-4rem\\)\\].grid-cols-\\[260px_1fr_300px\\] > div:nth-child(2)');
       
-      // 确保不是在输入框或其他可编辑元素中
-      const isEditableElement = target.tagName === 'INPUT' || 
-                               target.tagName === 'TEXTAREA' || 
-                               target.isContentEditable ||
-                               target.closest('input') ||
-                               target.closest('textarea') ||
-                               target.closest('[contenteditable="true"]');
-      
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "c" && selected && designArea && !isEditableElement) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "c" && selected && designArea) {
         e.preventDefault();
         onCopy(selected);
       }
-      if (e.key === "Delete" && selectedId && designArea && !isEditableElement) {
+      if (e.key === "Delete" && selectedId && designArea) {
         e.preventDefault();
         deleteNode(selectedId);
       }
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z" && !isEditableElement) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") {
         e.preventDefault();
         if (e.shiftKey) redo(); else undo();
       }
-      if ((e.metaKey || e.ctrlKey) && (e.key.toLowerCase() === "y") && !isEditableElement) {
+      if ((e.metaKey || e.ctrlKey) && (e.key.toLowerCase() === "y")) {
         e.preventDefault();
         redo();
       }
-      if (e.altKey && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key) && designArea && !isEditableElement) {
+      if (e.altKey && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key) && designArea) {
         e.preventDefault();
         const map: Record<string, "left" | "right" | "top" | "bottom"> = {
           ArrowLeft: "left",
@@ -7551,8 +7541,8 @@ export default function Studio() {
   };
 
   return (
-    <div className="grid h-screen grid-cols-[260px_1fr_300px]">
-      <div className="border-r p-3 h-full flex flex-col">
+    <div className="grid h-[calc(100vh-4rem)] grid-cols-[260px_1fr_300px]">
+      <div className="border-r h-full flex flex-col ">
         <Tabs defaultValue="pages" className="w-full h-full flex flex-col">
           <TabsList className="grid w-full grid-cols-3 flex-shrink-0">
             <TabsTrigger value="pages">页面</TabsTrigger>
@@ -7560,8 +7550,8 @@ export default function Studio() {
             <TabsTrigger value="components">组件库</TabsTrigger>
           </TabsList>
           
-          <TabsContent value="pages" className="mt-3 flex-1 min-h-0">
-            <div className="h-full flex flex-col">
+          <TabsContent value="pages" className="mt-3 relative flex-1 min-h-0 ml-3" >
+            <div className="absolute inset-0 flex flex-col">
               <div className="flex items-center justify-between mb-3 flex-shrink-0">
                 <div className="flex gap-2">
                   <div className="flex border rounded-md">
@@ -7603,7 +7593,7 @@ export default function Studio() {
                 </div>
               </div>
               
-              <div className="flex-1 min-h-0 overflow-y-auto">
+              <div className="flex-1 min-h-0 overflow-y-auto" style={{ scrollbarWidth: 'thin', scrollbarColor: 'hsl(var(--muted-foreground) / 0.5) hsl(var(--muted))' }}>
                 <div className="space-y-2">
                   {pageViewMode === "list" ? (
                   // 列表视图
@@ -7750,8 +7740,8 @@ export default function Studio() {
             </div>
           </TabsContent>
           
-          <TabsContent value="layouts" className="mt-3 flex-1 min-h-0">
-            <div className="h-full flex flex-col">
+          <TabsContent value="layouts" className="mt-3 relative flex-1 min-h-0 ml-3">
+            <div className="absolute inset-0 flex flex-col">
               <div className="flex-1 min-h-0 overflow-y-auto">
               <Accordion type="multiple" className="w-full" value={accordionValue} onValueChange={setAccordionValue}>
               {Object.entries(layoutTemplates).map(([groupName, templates]) => (
@@ -7786,8 +7776,8 @@ export default function Studio() {
             </div>
           </TabsContent>
           
-          <TabsContent value="components" className="mt-3 flex-1 min-h-0">
-            <div className="h-full flex flex-col">
+          <TabsContent value="components" className="mt-3 relative flex-1 min-h-0 ml-3">
+            <div className="absolute inset-0 flex flex-col">
               {/* 搜索输入框 */}
               <div className="mb-3">
               <Input
@@ -7921,7 +7911,7 @@ export default function Studio() {
           </div>
         </div>
         {showPreview ? (
-          <div className="h-full" onKeyDown={handleDesignPanelKeyDown} tabIndex={-1} data-design-canvas="true">
+          <div className="flex-1 min-h-0" onKeyDown={handleDesignPanelKeyDown} tabIndex={-1}>
             <SplitPreview
               page={page}
               selectedId={selectedId}
@@ -7938,20 +7928,20 @@ export default function Studio() {
             />
           </div>
         ) : (
-          <div className="h-full" onKeyDown={handleDesignPanelKeyDown} tabIndex={-1} data-design-canvas="true">
+          <div className="flex-1 min-h-0" onKeyDown={handleDesignPanelKeyDown} tabIndex={-1}>
             <Canvas page={page} setPage={commit} select={selectedId} setSelect={setSelectedId} insertSibling={insertSibling} moveBeforeAfter={moveBeforeAfter} moveAsChild={moveAsChild} onPanelSizeChange={onPanelSizeChange} onCopy={handleContextCopy} onPaste={handleContextPaste} onDelete={handleContextDelete} onDuplicate={handleContextDuplicate} />
           </div>
         )}
       </div>
-      <div className="border-l h-full flex flex-col">
+      <div className="border-l h-full flex flex-col">   
         <Tabs defaultValue="props" className="h-full flex flex-col">
-          <TabsList className="m-3 flex-shrink-0">
+          <TabsList className=" flex-shrink-0">
             <TabsTrigger value="props">属性</TabsTrigger>
             <TabsTrigger value="events">事件</TabsTrigger>
             <TabsTrigger value="page">页面</TabsTrigger>
           </TabsList>
-          <TabsContent value="props" className="flex-1 min-h-0 ">
-            <div className="h-full overflow-y-auto">
+          <TabsContent value="props" className="relative flex-1 min-h-0">
+             <div className="absolute inset-0 overflow-y-auto">
               <Inspector
               selected={selected}
               update={updateNode}
@@ -8018,16 +8008,16 @@ export default function Studio() {
             />
             </div>
           </TabsContent>
-          <TabsContent value="events" className="flex-1 min-h-0 ">
-            <div className="h-full overflow-y-auto">
+          <TabsContent value="events" className="relative flex-1 min-h-0">
+             <div className="absolute inset-0 overflow-y-auto">
               <EventsPanel
                 selected={selected}
                 update={updateNode}
               />
             </div>
           </TabsContent>
-          <TabsContent value="page" className="flex-1 min-h-0 px-3 pb-3">
-            <div className="h-full overflow-y-auto">
+          <TabsContent value="page" className="relative flex-1 min-h-0 ml-3">
+             <div className="absolute inset-0 overflow-y-auto">
               <div className="space-y-3">
               <label className="text-xs">页面名称</label>
               <Input value={page.name} onChange={(e) => commit({ ...page, name: e.target.value, updatedAt: Date.now() })} />
