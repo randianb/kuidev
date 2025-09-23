@@ -469,9 +469,13 @@ export const registry: Record<string, Renderer> = {
 
       className={cn(
         "relative w-full h-full ",
-        ctx.design ? "rounded-md border border-dashed p-3 hover:border-ring" : "border-transparent p-0",
+        ctx.design ? "rounded-md border border-dashed hover:border-ring" : "border-transparent",
         node.props?.className,
       )}
+      style={{
+        padding: ctx.design ? '12px' : '0',
+        boxSizing: 'border-box'
+      }}
       data-node-id={node.id}
     >
       {ctx.design && ctx.selectedId === node.id && !node.locked && !(ctx.rootNode && isNodeInLockedContainer(node.id, ctx.rootNode)) && (
@@ -739,10 +743,8 @@ export const registry: Record<string, Renderer> = {
         )}>
           {(node.children ?? []).map((child) => (
             <div key={child.id} className={cn(
-              // 只有在启用flex且为对应布局时才应用flex-1
-              (node.layout === "row" && node.flexEnabled) || 
-              (node.layout === "col" && node.flexEnabled) 
-                ? "flex-1" : ""
+              // 在flex布局中，子元素应该获得flex-1来填满可用空间，但保持完整高度
+              node.flexEnabled ? "flex-1 h-full" : ""
             )}>
               <NodeRenderer node={child} ctx={ctx} />
             </div>
@@ -3363,6 +3365,7 @@ export function NodeRenderer({ node, ctx }: { node: NodeMeta; ctx: any }) {
           data-type={node.type}
           className={cn(
             "relative",
+            node.type === "Container" ? "h-full" : "",
             ctx.selectedId === node.id && "ring-2 ring-blue-500/60 rounded",
             droppable && over && "ring-2 ring-ring/60 rounded bg-accent/10",
             getSpacingClasses(node.margin, node.padding),
@@ -3385,16 +3388,20 @@ export function NodeRenderer({ node, ctx }: { node: NodeMeta; ctx: any }) {
           }}
           style={node.props?.style}
         >
-      {/* before drop zone */}
+      {/* before drop zone - covers top half of the container */}
       {(
         <div
-          className="absolute -top-2 left-0 right-0 h-3 z-10"
+          className="absolute top-0 left-0 right-0 h-1/2 z-10 pointer-events-none"
           onDragOver={(e) => {
             if (Array.from(e.dataTransfer.types).includes("application/x-move")) {
+              e.currentTarget.style.pointerEvents = "auto";
               e.preventDefault();
               e.stopPropagation();
               try { e.dataTransfer.dropEffect = "move"; } catch {}
             }
+          }}
+          onDragLeave={(e) => {
+            e.currentTarget.style.pointerEvents = "none";
           }}
           onDrop={(e) => {
             const dragId = e.dataTransfer.getData("application/x-move");
@@ -3405,6 +3412,7 @@ export function NodeRenderer({ node, ctx }: { node: NodeMeta; ctx: any }) {
               bus.publish("dnd.log", { action: "drop-before", from: dragId, before: node.id });
               ctx.moveBeforeAfter?.(dragId, node.id, "before");
             }
+            e.currentTarget.style.pointerEvents = "none";
           }}
         />
       )}
@@ -3414,16 +3422,20 @@ export function NodeRenderer({ node, ctx }: { node: NodeMeta; ctx: any }) {
         {Comp(node, { ...ctx })}
       </div>
       
-      {/* after drop zone */}
+      {/* after drop zone - covers bottom half of the container */}
       {(
         <div
-          className="absolute -bottom-2 left-0 right-0 h-3 z-10"
+          className="absolute bottom-0 left-0 right-0 h-1/2 z-10 pointer-events-none"
           onDragOver={(e) => {
             if (Array.from(e.dataTransfer.types).includes("application/x-move")) {
+              e.currentTarget.style.pointerEvents = "auto";
               e.preventDefault();
               e.stopPropagation();
               try { e.dataTransfer.dropEffect = "move"; } catch {}
             }
+          }}
+          onDragLeave={(e) => {
+            e.currentTarget.style.pointerEvents = "none";
           }}
           onDrop={(e) => {
             const dragId = e.dataTransfer.getData("application/x-move");
@@ -3434,6 +3446,7 @@ export function NodeRenderer({ node, ctx }: { node: NodeMeta; ctx: any }) {
               bus.publish("dnd.log", { action: "drop-after", from: dragId, after: node.id });
               ctx.moveBeforeAfter?.(dragId, node.id, "after");
             }
+            e.currentTarget.style.pointerEvents = "none";
           }}
         />
       )}

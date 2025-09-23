@@ -41,7 +41,7 @@ function MultiRootRenderer({
   return (
     <div className="h-full flex flex-col space-y-4">
       {roots.map((root, index) => (
-        <div key={root.id} className="relative flex-1 min-h-0">
+        <div key={root.id} className={`relative ${roots.length === 1 ? 'h-full' : 'flex-1 min-h-0'}`}>
           {roots.length > 1 && (
             <div className="absolute -top-2 -left-2 z-10 bg-blue-500 text-white text-xs px-2 py-1 rounded">
               根节点 {index + 1}
@@ -129,7 +129,7 @@ function Canvas({
   };
 
   return (
-    <div className="h-full overflow-hidden">
+    <div className="h-full">
       <div className="h-full">
         <MultiRootRenderer
           page={page}
@@ -243,7 +243,7 @@ function SplitPreview({
   return (
     <ResizablePanelGroup direction="horizontal">
       <ResizablePanel defaultSize={55} minSize={30}>
-        <div className="h-full overflow-hidden">
+        <div className="h-full">
           <div className="h-full w-full bg-background flex flex-col" style={{ width }}>
             <div className={`h-full overflow-y-auto overflow-x-hidden ${hasRemovePaddingComponent ? '' : 'p-2'}`}>
               <NodeRenderer
@@ -271,7 +271,7 @@ function SplitPreview({
       </ResizablePanel>
       <ResizableHandle withHandle />
       <ResizablePanel defaultSize={45} minSize={30}>
-        <div className="h-full overflow-hidden">
+        <div className="h-full">
           <div className="mx-auto h-full w-full max-w-full rounded border bg-background shadow-sm flex flex-col" style={{ width, overflow: "hidden" }}>
             <div className={`border-b text-xs text-muted-foreground ${hasRemovePaddingComponent ? 'p-1' : 'p-2'}`}>预览</div>
             <div className="flex-1 overflow-auto">
@@ -7189,25 +7189,35 @@ export default function Studio() {
     const onKey = (e: KeyboardEvent) => {
       // 检查是否在设计区域（中间面板）
       const target = e.target as HTMLElement;
-      const designArea = target.closest('.grid.h-\\[calc\\(100vh-4rem\\)\\].grid-cols-\\[260px_1fr_300px\\] > div:nth-child(2)');
+      const designArea = target.closest('[data-design-canvas="true"]') || 
+                        target.closest('.h-full[tabindex="-1"]') ||
+                        target.closest('.grid.h-\\[calc\\(100vh-4rem\\)\\].grid-cols-\\[260px_1fr_300px\\] > div:nth-child(2)');
       
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "c" && selected && designArea) {
+      // 确保不是在输入框或其他可编辑元素中
+      const isEditableElement = target.tagName === 'INPUT' || 
+                               target.tagName === 'TEXTAREA' || 
+                               target.isContentEditable ||
+                               target.closest('input') ||
+                               target.closest('textarea') ||
+                               target.closest('[contenteditable="true"]');
+      
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "c" && selected && designArea && !isEditableElement) {
         e.preventDefault();
         onCopy(selected);
       }
-      if (e.key === "Delete" && selectedId && designArea) {
+      if (e.key === "Delete" && selectedId && designArea && !isEditableElement) {
         e.preventDefault();
         deleteNode(selectedId);
       }
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z" && !isEditableElement) {
         e.preventDefault();
         if (e.shiftKey) redo(); else undo();
       }
-      if ((e.metaKey || e.ctrlKey) && (e.key.toLowerCase() === "y")) {
+      if ((e.metaKey || e.ctrlKey) && (e.key.toLowerCase() === "y") && !isEditableElement) {
         e.preventDefault();
         redo();
       }
-      if (e.altKey && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key) && designArea) {
+      if (e.altKey && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key) && designArea && !isEditableElement) {
         e.preventDefault();
         const map: Record<string, "left" | "right" | "top" | "bottom"> = {
           ArrowLeft: "left",
@@ -7541,7 +7551,7 @@ export default function Studio() {
   };
 
   return (
-    <div className="grid h-[calc(100vh-4rem)] grid-cols-[260px_1fr_300px]">
+    <div className="grid h-screen grid-cols-[260px_1fr_300px]">
       <div className="border-r p-3 h-full flex flex-col">
         <Tabs defaultValue="pages" className="w-full h-full flex flex-col">
           <TabsList className="grid w-full grid-cols-3 flex-shrink-0">
@@ -7911,7 +7921,7 @@ export default function Studio() {
           </div>
         </div>
         {showPreview ? (
-          <div className="flex-1 min-h-0" onKeyDown={handleDesignPanelKeyDown} tabIndex={-1}>
+          <div className="h-full" onKeyDown={handleDesignPanelKeyDown} tabIndex={-1} data-design-canvas="true">
             <SplitPreview
               page={page}
               selectedId={selectedId}
@@ -7928,7 +7938,7 @@ export default function Studio() {
             />
           </div>
         ) : (
-          <div className="flex-1 min-h-0" onKeyDown={handleDesignPanelKeyDown} tabIndex={-1}>
+          <div className="h-full" onKeyDown={handleDesignPanelKeyDown} tabIndex={-1} data-design-canvas="true">
             <Canvas page={page} setPage={commit} select={selectedId} setSelect={setSelectedId} insertSibling={insertSibling} moveBeforeAfter={moveBeforeAfter} moveAsChild={moveAsChild} onPanelSizeChange={onPanelSizeChange} onCopy={handleContextCopy} onPaste={handleContextPaste} onDelete={handleContextDelete} onDuplicate={handleContextDuplicate} />
           </div>
         )}
