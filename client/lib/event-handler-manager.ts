@@ -173,6 +173,25 @@ execHandler('navigate', {
       { name: 'target', type: 'string', required: false, description: '打开方式：_self(当前窗口) 或 _blank(新窗口)', defaultValue: '_self' },
       { name: 'replace', type: 'boolean', required: false, description: '是否替换当前历史记录', defaultValue: false }
     ]
+  },
+  openCodeEditor: {
+    name: 'openCodeEditor',
+    description: '打开代码编辑器',
+    eventTypes: ['codeEditor.open'],
+    exampleCode: {
+      curl: '# openCodeEditor 处理器不支持 HTTP 调用',
+      javascript: `execHandler('openCodeEditor', {
+  field: 'handler',
+  currentValue: 'console.log("Hello World");',
+  title: '编辑事件处理器'
+});`,
+      description: '打开代码编辑器对话框，用于编辑JavaScript代码'
+    },
+    parameters: [
+      { name: 'field', type: 'string', required: false, description: '编辑的字段名称', defaultValue: 'handler' },
+      { name: 'currentValue', type: 'string', required: false, description: '当前代码值', defaultValue: '' },
+      { name: 'title', type: 'string', required: false, description: '编辑器标题', defaultValue: '代码编辑器' }
+    ]
   }
 };
 

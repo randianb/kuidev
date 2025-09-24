@@ -10,8 +10,9 @@ import { LookupSelector } from "@/components/ui/lookup-selector";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, Trash2, Edit, Save, X, Upload, Link, FileText } from "lucide-react";
+import { Plus, Trash2, Edit, Save, X, Upload, Link, FileText, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { bus } from "@/lib/eventBus";
 
 interface EditableColumn {
   key: string;
@@ -39,11 +40,17 @@ interface EditableTableProps {
   data: any[];
   onChange?: (data: any[]) => void;
   onCellChange?: (rowIndex: number, columnKey: string, oldValue: any, newValue: any) => void;
+  onRefresh?: () => void;
   className?: string;
   allowAdd?: boolean;
   allowDelete?: boolean;
   allowEdit?: boolean;
+  allowRefresh?: boolean;
   pageSize?: number;
+  listId?: string;
+  componentId?: string;
+  nodeId?: string;
+  stickyActions?: boolean; // 是否固定操作列到最右侧
 }
 
 export function EditableTable({
@@ -51,16 +58,23 @@ export function EditableTable({
   data = [],
   onChange,
   onCellChange,
+  onRefresh,
   className,
   allowAdd = true,
   allowDelete = true,
   allowEdit = true,
-  pageSize = 10
+  allowRefresh = true,
+  pageSize = 10,
+  listId,
+  componentId,
+  nodeId,
+  stickyActions = false
 }: EditableTableProps) {
   const [tableData, setTableData] = useState(data);
   const [editingCell, setEditingCell] = useState<{ rowIndex: number; columnKey: string } | null>(null);
   const [editingValue, setEditingValue] = useState<any>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [autoNumberCounter, setAutoNumberCounter] = useState(() => {
     // 计算自动编号的起始值
     const autoNumberColumns = columns.filter(col => col.type === 'autonumber');
@@ -77,6 +91,52 @@ export function EditableTable({
   useEffect(() => {
     setTableData(data);
   }, [data]);
+
+  // 列表刷新功能
+  useEffect(() => {
+    const handleListRefresh = (payload: any) => {
+      // 检查是否需要刷新当前列表
+      const shouldRefresh = 
+        !payload || // 刷新所有列表
+        payload.listId === listId ||
+        payload.componentId === componentId ||
+        payload.nodeId === nodeId;
+
+      if (shouldRefresh) {
+        console.log('刷新列表数据:', { listId, componentId, nodeId });
+        handleRefresh();
+      }
+    };
+
+    const handleRefreshAll = () => {
+      console.log('刷新所有列表数据');
+      handleRefresh();
+    };
+
+    const unsubRefresh = bus.subscribe('list.refresh', handleListRefresh);
+    const unsubRefreshAll = bus.subscribe('list.refresh.all', handleRefreshAll);
+
+    return () => {
+      unsubRefresh();
+      unsubRefreshAll();
+    };
+  }, [listId, componentId, nodeId]);
+
+  // 刷新处理函数
+  const handleRefresh = async () => {
+    if (isRefreshing) return;
+    
+    setIsRefreshing(true);
+    try {
+      if (onRefresh) {
+        await onRefresh();
+      }
+    } catch (error) {
+      console.error('列表刷新失败:', error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   const totalPages = Math.ceil(tableData.length / pageSize);
   const paginatedData = tableData.slice(
@@ -423,12 +483,27 @@ export function EditableTable({
   return (
     <div className={cn("space-y-4", className)}>
       {/* 工具栏 */}
-      {allowAdd && (
+      {(allowAdd || allowRefresh) && (
         <div className="flex justify-between items-center">
-          <Button onClick={handleAddRow} size="sm">
-            <Plus className="h-4 w-4 mr-2" />
-            添加行
-          </Button>
+          <div className="flex items-center gap-2">
+            {allowAdd && (
+              <Button onClick={handleAddRow} size="sm">
+                <Plus className="h-4 w-4 mr-2" />
+                添加行
+              </Button>
+            )}
+            {allowRefresh && (
+              <Button 
+                onClick={handleRefresh} 
+                size="sm" 
+                variant="outline"
+                disabled={isRefreshing}
+              >
+                <RefreshCw className={cn("h-4 w-4 mr-2", isRefreshing && "animate-spin")} />
+                刷新
+              </Button>
+            )}
+          </div>
           <div className="text-sm text-muted-foreground">
             共 {tableData.length} 条记录
           </div>
@@ -437,22 +512,42 @@ export function EditableTable({
 
       {/* 表格 */}
       <div className="border rounded-md">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              {columns.map(column => (
-                <TableHead key={column.key} style={{ width: column.width }}>
-                  <div className="flex items-center gap-1">
-                    {column.title}
-                    {column.required && <span className="text-red-500">*</span>}
-                  </div>
-                </TableHead>
-              ))}
-              {allowDelete && (
-                <TableHead className="w-16">操作</TableHead>
-              )}
-            </TableRow>
-          </TableHeader>
+        <div className={cn(
+          "relative",
+          stickyActions ? "overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100" : "overflow-x-auto"
+        )}
+        style={{ 
+          maxWidth: '100%',
+          ...(stickyActions && { minWidth: 'fit-content' })
+        }}>
+          <Table 
+             containerClassName="min-w-full"
+             style={{ 
+               minWidth: stickyActions ? `${columns.length * 150 + 80}px` : 'auto'
+             }}
+           >
+            <TableHeader>
+              <TableRow>
+                {columns.map(column => (
+                  <TableHead key={column.key} style={{ width: column.width }}>
+                    <div className="flex items-center gap-1">
+                      {column.title}
+                      {column.required && <span className="text-red-500">*</span>}
+                    </div>
+                  </TableHead>
+                ))}
+                {allowDelete && (
+                  <TableHead 
+                    className={cn(
+                      "w-16",
+                      stickyActions && "sticky right-0 bg-background border-l shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.1)]"
+                    )}
+                  >
+                    操作
+                  </TableHead>
+                )}
+              </TableRow>
+            </TableHeader>
           <TableBody>
             {paginatedData.length === 0 ? (
               <TableRow>
@@ -472,7 +567,11 @@ export function EditableTable({
                     </TableCell>
                   ))}
                   {allowDelete && (
-                    <TableCell>
+                    <TableCell 
+                      className={cn(
+                        stickyActions && "sticky right-0 bg-background border-l shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.1)]"
+                      )}
+                    >
                       <Button
                         size="sm"
                         variant="ghost"
@@ -488,6 +587,7 @@ export function EditableTable({
             )}
           </TableBody>
         </Table>
+        </div>
       </div>
 
       {/* 分页 */}

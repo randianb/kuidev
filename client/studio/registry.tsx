@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
@@ -42,7 +43,7 @@ import {
   ArrowUpDown, Plus, Minus, Edit, Trash2, Save, Search, Settings, 
   User, Home, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Check, 
   X, Heart, Star, Download, Upload as UploadIcon, RefreshCw, Copy, Share, 
-  Info, AlertTriangle, XCircle, CheckCircle, Loader2
+  Info, AlertTriangle, XCircle, CheckCircle, Loader2, Eye, Code, GripVertical
 } from "lucide-react";
 import ThemeSwitcher from "@/components/site/ThemeSwitcher";
 import NavigationControls from "../components/NavigationControls";
@@ -1894,6 +1895,31 @@ export const registry: Record<string, Renderer> = {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     
+    // 搜索功能
+    const [searchText, setSearchText] = useState("");
+    const enableSearch = node.props?.enableSearch ?? false;
+    const searchPlaceholder = node.props?.searchPlaceholder ?? "搜索...";
+    
+    // 排序功能
+    const [sortConfig, setSortConfig] = useState<{key: string, direction: 'asc' | 'desc'} | null>(null);
+    const enableSort = node.props?.enableSort ?? false;
+    
+    // 筛选功能
+    const [filters, setFilters] = useState<Record<string, string>>({});
+    const enableFilter = node.props?.enableFilter ?? false;
+    
+    // 列调整大小功能
+    const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
+    const enableResize = node.props?.enableResize ?? false;
+    
+    // 序号列功能
+    const showRowNumber = node.props?.showRowNumber ?? false;
+    
+    // 行选择功能
+    const enableSelection = node.props?.enableSelection ?? false;
+    const selectionMode = node.props?.selectionMode ?? "multiple"; // single, multiple
+    const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
+    
     // 分页配置
     const pageSize: number = Number(node.props?.pageSize ?? 5);
     const [page, setPage] = useState(1);
@@ -1919,16 +1945,19 @@ export const registry: Record<string, Renderer> = {
     const showActions = node.props?.showActions ?? false;
     
     // 图标映射
-    const iconMap: Record<string, string> = {
-      edit: "✏️",
-      delete: "🗑️",
-      view: "👁️",
-      download: "⬇️",
-      share: "📤",
-      copy: "📋",
-      settings: "⚙️",
-      info: "ℹ️"
+    const iconMap: Record<string, React.ReactNode> = {
+      edit: <Edit className="h-4 w-4" />,
+      delete: <Trash2 className="h-4 w-4" />,
+      view: <Eye className="h-4 w-4" />,
+      download: <Download className="h-4 w-4" />,
+      share: <Share className="h-4 w-4" />,
+      copy: <Copy className="h-4 w-4" />,
+      settings: <Settings className="h-4 w-4" />,
+      info: <Info className="h-4 w-4" />,
+      code: <Code className="h-4 w-4" />
     };
+    
+
     
     useEffect(() => {
       if (node.props?.dataSource === "url" && node.props?.url) {
@@ -1975,16 +2004,119 @@ export const registry: Record<string, Renderer> = {
       ellipsis?: boolean; // 文本溢出省略
       fixed?: 'left' | 'right'; // 固定列
     }> = node.props?.columns ?? [];
+    
+    // 数据处理：搜索、筛选、排序
+    const processedRows = useMemo(() => {
+      let filtered = [...rows];
+      
+      // 搜索过滤
+      if (enableSearch && searchText.trim()) {
+        filtered = filtered.filter(row => {
+          return columns.some(col => {
+            const value = String(row[col.key] || '').toLowerCase();
+            return value.includes(searchText.toLowerCase());
+          });
+        });
+      }
+      
+      // 列筛选
+      if (enableFilter) {
+        Object.entries(filters).forEach(([key, filterValue]) => {
+          if (filterValue.trim()) {
+            filtered = filtered.filter(row => {
+              const value = String(row[key] || '').toLowerCase();
+              return value.includes(filterValue.toLowerCase());
+            });
+          }
+        });
+      }
+      
+      // 排序
+      if (enableSort && sortConfig) {
+        filtered.sort((a, b) => {
+          const aVal = a[sortConfig.key];
+          const bVal = b[sortConfig.key];
+          
+          if (aVal === bVal) return 0;
+          
+          let comparison = 0;
+          if (typeof aVal === 'number' && typeof bVal === 'number') {
+            comparison = aVal - bVal;
+          } else {
+            comparison = String(aVal || '').localeCompare(String(bVal || ''));
+          }
+          
+          return sortConfig.direction === 'desc' ? -comparison : comparison;
+        });
+      }
+      
+      return filtered;
+    }, [rows, searchText, filters, sortConfig, enableSearch, enableFilter, enableSort, columns]);
+    
     const paged = useMemo(() => {
       const start = (page - 1) * pageSize;
-      return rows.slice(start, start + pageSize);
-    }, [rows, page, pageSize]);
+      return processedRows.slice(start, start + pageSize);
+    }, [processedRows, page, pageSize]);
+    
+    // 选择功能处理函数
+    const handleRowSelect = (rowIndex: number) => {
+      if (!enableSelection) return;
+      
+      const newSelectedRows = new Set(selectedRows);
+      
+      if (selectionMode === "single") {
+        // 单选模式：清空其他选择，只选择当前行
+        newSelectedRows.clear();
+        if (!selectedRows.has(rowIndex)) {
+          newSelectedRows.add(rowIndex);
+        }
+      } else {
+        // 多选模式：切换当前行的选择状态
+        if (selectedRows.has(rowIndex)) {
+          newSelectedRows.delete(rowIndex);
+        } else {
+          newSelectedRows.add(rowIndex);
+        }
+      }
+      
+      setSelectedRows(newSelectedRows);
+    };
+    
+    const handleSelectAll = () => {
+      if (!enableSelection || selectionMode === "single") return;
+      
+      const newSelectedRows = new Set<number>();
+      if (selectedRows.size < paged.length) {
+        // 如果不是全选状态，则全选当前页
+        paged.forEach((_, index) => {
+          const globalIndex = (page - 1) * pageSize + index;
+          newSelectedRows.add(globalIndex);
+        });
+      }
+      // 如果已经是全选状态，则清空选择（newSelectedRows 保持为空）
+      
+      setSelectedRows(newSelectedRows);
+    };
+    
+    const isAllSelected = enableSelection && selectionMode === "multiple" && 
+      paged.length > 0 && paged.every((_, index) => {
+        const globalIndex = (page - 1) * pageSize + index;
+        return selectedRows.has(globalIndex);
+      });
+    
+    const isIndeterminate = enableSelection && selectionMode === "multiple" && 
+      selectedRows.size > 0 && !isAllSelected;
+    
+    // 当数据变化时重置页码
+    useEffect(() => {
+      setPage(1);
+    }, [searchText, filters, sortConfig]);
     
     // 分页器组件
     const renderPager = () => {
       if (!showPager) return null;
       
-      const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+      const totalPages = Math.max(1, Math.ceil(processedRows.length / pageSize));
       const sizeClass = pagerSize === 'small' ? 'text-xs' : pagerSize === 'large' ? 'text-base' : 'text-sm';
       const buttonSize = pagerSize === 'small' ? 'sm' : pagerSize === 'large' ? 'default' : 'sm';
       
@@ -2011,7 +2143,7 @@ export const registry: Record<string, Renderer> = {
           
           {showPageInfo && (
             <span className="text-muted-foreground whitespace-nowrap">
-              第 {page} 页 / 共 {totalPages} 页 (共 {rows.length} 条)
+              第 {page} 页 / 共 {totalPages} 页 (共 {processedRows.length} 条)
             </span>
           )}
           
@@ -2037,7 +2169,7 @@ export const registry: Record<string, Renderer> = {
           {showPageSizeSelector && (
             <Select value={String(pageSize)} onValueChange={(v) => {
               const newPageSize = Number(v);
-              const newTotalPages = Math.ceil(rows.length / newPageSize);
+              const newTotalPages = Math.ceil(processedRows.length / newPageSize);
               if (page > newTotalPages) {
                 setPage(Math.max(1, newTotalPages));
               }
@@ -2086,6 +2218,21 @@ export const registry: Record<string, Renderer> = {
     
     return (
       <div className="w-full space-y-2">
+        {/* 搜索框 */}
+        {enableSearch && (
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1 max-w-sm">
+              <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder={searchPlaceholder}
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+                className="pl-8"
+              />
+            </div>
+          </div>
+        )}
+        
         {/* 顶部分页器 */}
         {(pagerPosition === 'top' || pagerPosition === 'both') && renderPager()}
         
@@ -2093,20 +2240,125 @@ export const registry: Record<string, Renderer> = {
           <Table className={node.props?.className}>
             <TableHeader>
               <TableRow>
-                {columns.map((c) => (
+                {/* 选择列 */}
+                {enableSelection && (
+                  <TableHead className={cn(
+                    "w-12",
+                    node.props?.variant === "compact" && "px-1 py-0.5"
+                  )}>
+                    {selectionMode === "multiple" && (
+                      <Checkbox
+                        checked={isAllSelected}
+                        onCheckedChange={handleSelectAll}
+                        aria-label="全选"
+                        className="mx-auto"
+                        ref={(el) => {
+                          if (el) {
+                            (el as HTMLInputElement).indeterminate = isIndeterminate;
+                          }
+                        }}
+                      />
+                    )}
+                  </TableHead>
+                )}
+                
+                {/* 序号列 */}
+                {showRowNumber && (
+                  <TableHead className={cn(
+                    "w-16 text-center",
+                    node.props?.variant === "compact" && "px-1 py-0.5"
+                  )}>
+                    序号
+                  </TableHead>
+                )}
+                
+                {columns.map((c, index) => (
                   <TableHead 
                     key={c.key} 
                     className={cn(
+                      "relative",
                       node.props?.variant === "compact" && "px-1 py-0.5",
                       c.align === 'center' && "text-center",
                       c.align === 'right' && "text-right"
                     )}
-                    style={{ width: c.width }}
+                    style={{ width: columnWidths[c.key] || c.width }}
                   >
-                    <div className="flex items-center gap-1">
-                      {c.title}
-                      {c.sortable && <ArrowUpDown className="h-3 w-3 opacity-50" />}
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1">
+                        <span 
+                          className={cn(
+                            "flex items-center gap-1",
+                            (enableSort && (c.sortable !== false)) && "cursor-pointer hover:text-foreground"
+                          )}
+                          onClick={() => {
+                            if (enableSort && (c.sortable !== false)) {
+                              setSortConfig(prev => {
+                                if (prev?.key === c.key) {
+                                  return prev.direction === 'asc' 
+                                    ? { key: c.key, direction: 'desc' }
+                                    : null;
+                                } else {
+                                  return { key: c.key, direction: 'asc' };
+                                }
+                              });
+                            }
+                          }}
+                        >
+                          {c.title}
+                          {enableSort && (c.sortable !== false) && (
+                            <ArrowUpDown className={cn(
+                              "h-3 w-3",
+                              sortConfig?.key === c.key ? "opacity-100" : "opacity-50"
+                            )} />
+                          )}
+                        </span>
+                      </div>
+                      
+                      {/* 筛选输入框 */}
+                      {enableFilter && (c.filterable !== false) && (
+                        <Input
+                          placeholder="筛选..."
+                          value={filters[c.key] || ''}
+                          onChange={(e) => setFilters(prev => ({
+                            ...prev,
+                            [c.key]: e.target.value
+                          }))}
+                          className="h-6 text-xs"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      )}
                     </div>
+                    
+                    {/* 列调整大小手柄 */}
+                    {enableResize && index < columns.length - 1 && (
+                      <div
+                        className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-primary/20 group"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          const startX = e.clientX;
+                          const startWidth = columnWidths[c.key] || parseInt(c.width+"" || "150");
+                          
+                          const handleMouseMove = (e: MouseEvent) => {
+                            const diff = e.clientX - startX;
+                            const newWidth = Math.max(50, startWidth + diff);
+                            setColumnWidths(prev => ({
+                              ...prev,
+                              [c.key]: newWidth
+                            }));
+                          };
+                          
+                          const handleMouseUp = () => {
+                            document.removeEventListener('mousemove', handleMouseMove);
+                            document.removeEventListener('mouseup', handleMouseUp);
+                          };
+                          
+                          document.addEventListener('mousemove', handleMouseMove);
+                          document.addEventListener('mouseup', handleMouseUp);
+                        }}
+                      >
+                        <GripVertical className="h-3 w-3 opacity-0 group-hover:opacity-100 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" />
+                      </div>
+                    )}
                   </TableHead>
                 ))}
                 {showActions && (
@@ -2117,7 +2369,7 @@ export const registry: Record<string, Renderer> = {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={columns.length + (showActions ? 1 : 0)} className="text-center py-8">
+                  <TableCell colSpan={columns.length + (showActions ? 1 : 0) + (enableSelection ? 1 : 0) + (showRowNumber ? 1 : 0)} className="text-center py-8">
                     <div className="flex items-center justify-center gap-2">
                       <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
                       <span className="text-muted-foreground">加载中...</span>
@@ -2126,7 +2378,7 @@ export const registry: Record<string, Renderer> = {
                 </TableRow>
               ) : error ? (
                 <TableRow>
-                  <TableCell colSpan={columns.length + (showActions ? 1 : 0)} className="text-center py-8">
+                  <TableCell colSpan={columns.length + (showActions ? 1 : 0) + (enableSelection ? 1 : 0) + (showRowNumber ? 1 : 0)} className="text-center py-8">
                     <div className="text-red-500">
                       <div className="font-medium">加载失败</div>
                       <div className="text-sm text-muted-foreground mt-1">{error}</div>
@@ -2135,7 +2387,7 @@ export const registry: Record<string, Renderer> = {
                 </TableRow>
               ) : paged.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={columns.length + (showActions ? 1 : 0)} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={columns.length + (showActions ? 1 : 0) + (enableSelection ? 1 : 0) + (showRowNumber ? 1 : 0)} className="text-center py-8 text-muted-foreground">
                     暂无数据
                   </TableCell>
                 </TableRow>
@@ -2146,7 +2398,8 @@ export const registry: Record<string, Renderer> = {
                     className={cn(
                       "cursor-pointer",
                       selectedIndex === idx && "bg-accent/30",
-                      node.props?.variant === "striped" && idx % 2 === 1 && "bg-muted/30"
+                      node.props?.variant === "striped" && idx % 2 === 1 && "bg-muted/30",
+                      enableSelection && selectedRows.has((page - 1) * pageSize + idx) && "bg-blue-50 dark:bg-blue-950/30"
                     )}
                     onClick={() => {
                       setSelectedIndex(idx);
@@ -2156,6 +2409,24 @@ export const registry: Record<string, Renderer> = {
                         (node.props.events as any[]).forEach((ev) => ev?.type === "rowSelect" && ev?.handler && execHandler(ev.handler, { row }));
                     }}
                   >
+                    {/* 选择列 */}
+                    {enableSelection && (
+                      <TableCell className={cn(node.props?.variant === "compact" && "px-1 py-0.5", "w-12")}>
+                        <Checkbox
+                          checked={selectedRows.has((page - 1) * pageSize + idx)}
+                          onCheckedChange={(checked) => handleRowSelect((page - 1) * pageSize + idx)}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </TableCell>
+                    )}
+                    
+                    {/* 序号列 */}
+                    {showRowNumber && (
+                      <TableCell className={cn(node.props?.variant === "compact" && "px-1 py-0.5", "w-16 text-center text-muted-foreground")}>
+                        {(page - 1) * pageSize + idx + 1}
+                      </TableCell>
+                    )}
+                    
                     {columns.map((c) => (
                       <TableCell 
                         key={c.key} 
@@ -2165,6 +2436,7 @@ export const registry: Record<string, Renderer> = {
                           c.align === 'right' && "text-right",
                           c.ellipsis && "truncate max-w-0"
                         )}
+                        style={{ width: columnWidths[c.key] || c.width }}
                       >
                         {renderCellContent(row, c)}
                       </TableCell>
@@ -2179,8 +2451,36 @@ export const registry: Record<string, Renderer> = {
                               variant={action.variant || "ghost"}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                if (action.handler) {
-                                  execHandler(action.handler, { row, action });
+                                
+                                // 发布actionClick事件到事件订阅系统
+                                bus.publish('actionClick', {
+                                  row,
+                                  action,
+                                  event: e,
+                                  timestamp: new Date().toISOString()
+                                });
+                                
+                                // 处理脚本执行逻辑
+                                if (action.script) {
+                                  // 如果有脚本，执行脚本
+                                  execHandler('custom', { 
+                                    script: action.script, 
+                                    row, 
+                                    action,
+                                    event: e 
+                                  });
+                                } else if (action.handler) {
+                                  // 保持原有的handler处理逻辑
+                                  if (typeof action.handler === 'string') {
+                                    execHandler('custom', { 
+                                      script: action.handler, 
+                                      row, 
+                                      action,
+                                      event: e 
+                                    });
+                                  } else {
+                                    execHandler(action.handler, { row, action, event: e });
+                                  }
                                 }
                               }}
                               className="h-6 px-2"
@@ -2209,29 +2509,41 @@ export const registry: Record<string, Renderer> = {
   EditableTable: (node) => {
     // 默认数据
     const defaultData = [
-      { id: 1, name: "张三", age: 25, email: "zhangsan@example.com", status: "active", progress: 75, date: "2024-01-15", department: "技术部" },
-      { id: 2, name: "李四", age: 30, email: "lisi@example.com", status: "inactive", progress: 60, date: "2024-02-20", department: "市场部" },
-      { id: 3, name: "王五", age: 28, email: "wangwu@example.com", status: "active", progress: 90, date: "2024-03-10", department: "设计部" }
+      { 
+        id: 1, name: "张三", age: 25, email: "zhangsan@example.com", phone: "13800138001", 
+        address: "北京市朝阳区", status: "active", progress: 75, date: "2024-01-15", 
+        department: "技术部", position: "前端工程师", salary: 15000, notes: "工作认真负责"
+      },
+      { 
+        id: 2, name: "李四", age: 30, email: "lisi@example.com", phone: "13800138002", 
+        address: "上海市浦东新区", status: "inactive", progress: 60, date: "2024-02-20", 
+        department: "市场部", position: "市场专员", salary: 12000, notes: "沟通能力强"
+      },
+      { 
+        id: 3, name: "王五", age: 28, email: "wangwu@example.com", phone: "13800138003", 
+        address: "深圳市南山区", status: "active", progress: 90, date: "2024-03-10", 
+        department: "设计部", position: "UI设计师", salary: 14000, notes: "设计能力出色"
+      }
     ];
 
-    // 默认列配置
+    // 默认列配置 - 添加更多列来测试水平滚动
     const defaultColumns = [
-      { key: "id", title: "ID", type: "auto-number", width: 80, editable: false },
-      { key: "name", title: "姓名", type: "text", width: 120, editable: true },
-      { key: "age", title: "年龄", type: "number", width: 80, editable: true },
-      { key: "email", title: "邮箱", type: "text", width: 200, editable: true },
-      { key: "status", title: "状态", type: "select", width: 100, editable: true, options: [
+      { key: "id", title: "ID", type: "autonumber", width: "80px", editable: false },
+      { key: "name", title: "姓名", type: "text", width: "120px", editable: true },
+      { key: "age", title: "年龄", type: "number", width: "80px", editable: true },
+      { key: "email", title: "邮箱", type: "text", width: "200px", editable: true },
+      { key: "phone", title: "电话", type: "text", width: "150px", editable: true },
+      { key: "address", title: "地址", type: "text", width: "200px", editable: true },
+      { key: "status", title: "状态", type: "select", width: "100px", editable: true, options: [
         { label: "激活", value: "active" },
         { label: "禁用", value: "inactive" }
       ]},
-      { key: "progress", title: "进度", type: "progress", width: 120, editable: true },
-      { key: "date", title: "日期", type: "date", width: 120, editable: true },
-      { key: "department", title: "部门", type: "lookup", width: 120, editable: true, lookupOptions: [
-        { label: "技术部", value: "技术部" },
-        { label: "市场部", value: "市场部" },
-        { label: "设计部", value: "设计部" },
-        { label: "人事部", value: "人事部" }
-      ]}
+      { key: "progress", title: "进度", type: "progress", width: "120px", editable: true },
+      { key: "date", title: "日期", type: "date", width: "120px", editable: true },
+      { key: "department", title: "部门", type: "text", width: "120px", editable: true },
+      { key: "position", title: "职位", type: "text", width: "150px", editable: true },
+      { key: "salary", title: "薪资", type: "number", width: "120px", editable: true },
+      { key: "notes", title: "备注", type: "text", width: "200px", editable: true }
     ];
 
     return (
@@ -2242,11 +2554,24 @@ export const registry: Record<string, Renderer> = {
          allowAdd={node.props?.allowAdd ?? true}
          allowDelete={node.props?.allowDelete ?? true}
          allowEdit={node.props?.allowEdit ?? true}
+         allowRefresh={node.props?.allowRefresh ?? true}
+         stickyActions={node.props?.stickyActions ?? true}
+         listId={node.props?.listId || node.id}
+         componentId={node.id}
+         nodeId={node.id}
          onChange={(newData) => {
           if (node.props?.events) {
             (node.props.events as any[]).forEach((ev) => 
               ev?.type === 'dataChange' && ev?.handler && 
               execHandler(ev.handler, { data: newData })
+            );
+          }
+        }}
+        onRefresh={() => {
+          if (node.props?.events) {
+            (node.props.events as any[]).forEach((ev) => 
+              ev?.type === 'refresh' && ev?.handler && 
+              execHandler(ev.handler, { nodeId: node.id, listId: node.props?.listId || node.id })
             );
           }
         }}

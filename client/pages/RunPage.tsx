@@ -6,6 +6,7 @@ import { bus } from "@/lib/eventBus";
 import { execHandler } from "@/lib/handlers";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PageMeta, getPageRoots } from "@/studio/types";
+import { invalidatePageCache } from "@/studio/page-metadata-manager";
 
 export default function RunPage() {
   const { id } = useParams();
@@ -57,6 +58,45 @@ export default function RunPage() {
     };
 
     const unsub = bus.subscribe('form.data.resolved', handleDataResolved);
+    return () => unsub();
+  }, [page?.id, page?.root?.code]);
+
+  // 页面刷新功能
+  useEffect(() => {
+    const handlePageRefresh = (payload: any) => {
+      // 如果指定了pageId，只刷新对应页面；否则刷新当前页面
+      if (payload?.pageId && payload.pageId !== page?.id) {
+        return;
+      }
+
+      console.log('刷新页面数据:', page?.id);
+      
+      // 清除缓存
+      if (payload?.clearCache !== false) {
+        invalidatePageCache();
+      }
+
+      // 重新加载页面数据
+      if (page && (page.id || page.root?.code)) {
+        setLoading(true);
+        setError(null);
+        setFormData(null);
+        
+        try {
+          execHandler('resolvefetch', {
+            id: page.id,
+            code: page.root?.code,
+            type: 'page'
+          });
+        } catch (err: any) {
+          console.error('页面数据刷新失败:', err);
+          setError(err.message || '数据刷新失败');
+          setLoading(false);
+        }
+      }
+    };
+
+    const unsub = bus.subscribe('page.refresh', handlePageRefresh);
     return () => unsub();
   }, [page?.id, page?.root?.code]);
 

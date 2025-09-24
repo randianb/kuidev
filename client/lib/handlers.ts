@@ -300,6 +300,18 @@ const handlers: Record<string, NamedHandler> = {
     }
   },
   
+  openCodeEditor: (params, ctx) => {
+    const { field = 'handler', currentValue = '', title = '代码编辑器' } = params;
+    
+    // 发布打开代码编辑器事件
+    ctx.publish('codeEditor.open', {
+      field,
+      currentValue,
+      title,
+      timestamp: Date.now()
+    });
+  },
+  
   navigateForward: (params, ctx) => {
     const historyItem = navigationHistory.goForward();
     if (historyItem) {
@@ -330,6 +342,44 @@ const handlers: Record<string, NamedHandler> = {
     } else {
       console.log('无法前进：已在历史记录的末尾位置');
     }
+  },
+
+  // 页面刷新功能
+  refreshPage: (params, ctx) => {
+    // 发布页面刷新事件，清除缓存并重新加载数据
+    ctx.publish('page.refresh', {
+      pageId: params?.pageId,
+      clearCache: params?.clearCache !== false, // 默认清除缓存
+      timestamp: Date.now()
+    });
+  },
+
+  // 列表刷新功能
+  refreshList: (params, ctx) => {
+    // 发布列表刷新事件
+    ctx.publish('list.refresh', {
+      listId: params?.listId,
+      componentId: params?.componentId,
+      nodeId: params?.nodeId,
+      timestamp: Date.now()
+    });
+  },
+
+  // 刷新当前页面
+  refreshCurrentPage: (params, ctx) => {
+    // 刷新当前页面，清除所有缓存
+    ctx.publish('page.refresh', {
+      clearCache: true,
+      timestamp: Date.now()
+    });
+  },
+
+  // 刷新所有列表
+  refreshAllLists: (params, ctx) => {
+    // 刷新页面上的所有列表组件
+    ctx.publish('list.refresh.all', {
+      timestamp: Date.now()
+    });
   }
 };
 

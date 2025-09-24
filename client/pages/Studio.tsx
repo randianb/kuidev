@@ -446,7 +446,7 @@ function ColumnManager({
         ) : (
           <div className="space-y-2">
             {columns.map((column, index) => (
-              <div key={index} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50">
+              <div key={`column-${column.key || column.title || index}`} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50">
                 <div className="flex-1 space-y-1">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium">{column.title}</span>
@@ -1073,6 +1073,11 @@ function ActionColumnManager({
   });
   const [jsonValue, setJsonValue] = useState('');
   const [jsonError, setJsonError] = useState('');
+  
+  // 代码编辑器状态
+  const [codeEditorOpen, setCodeEditorOpen] = useState(false);
+  const [editingCode, setEditingCode] = useState('');
+  const [editingField, setEditingField] = useState('');
 
   const addAction = () => {
     setShowAddDialog(true);
@@ -1081,13 +1086,14 @@ function ActionColumnManager({
       text: '操作',
       icon: '',
       variant: 'ghost',
-      handler: ''
+      handler: 'log',
+      script: 'console.log("操作按钮被点击了！", payload.row, payload.action);'
     });
     setJsonValue(JSON.stringify({
       text: '操作',
       icon: '',
       variant: 'ghost',
-      handler: ''
+      handler: 'console.log("操作按钮被点击了！", payload.row, payload.action);'
     }, null, 2));
     setJsonError('');
   };
@@ -1146,6 +1152,25 @@ function ActionColumnManager({
     onActionsChange(newActions);
   };
 
+  const saveCode = () => {
+    const [fieldType, indexStr] = editingField.split('-');
+    if (fieldType === 'action' && indexStr) {
+      const index = parseInt(indexStr);
+      if (editingIndex === index) {
+        // 编辑模式下保存到editingAction
+        setEditingAction({...editingAction, script: editingCode});
+      } else {
+        // 非编辑模式下直接保存到actions
+        const newActions = [...actions];
+        newActions[index] = {...newActions[index], script: editingCode};
+        onActionsChange(newActions);
+      }
+    }
+    setCodeEditorOpen(false);
+    setEditingField('');
+    setEditingCode('');
+  };
+
   return (
     <div className="space-y-3">
       <div className="grid gap-2">
@@ -1171,7 +1196,7 @@ function ActionColumnManager({
           
           <div className="space-y-2 max-h-48 overflow-y-auto">
             {actions.map((action, index) => (
-              <div key={index} className="border rounded p-2 space-y-2">
+              <div key={`action-${action.text || action.handler || index}`} className="border rounded p-2 space-y-2">
                 {editingIndex === index ? (
                   // 编辑模式
                   <div className="space-y-2">
@@ -1216,12 +1241,43 @@ function ActionColumnManager({
                       </div>
                       <div>
                         <label className="text-xs">事件处理器</label>
-                        <Input 
-                          value={editingAction.handler || ''} 
-                          onChange={(e) => setEditingAction({...editingAction, handler: e.target.value})}
-                          placeholder="handleEdit"
-                          className="h-6 text-xs"
-                        />
+                        <div className="space-y-1">
+                          <Input 
+                            value={editingAction.handler || ''} 
+                            onChange={(e) => setEditingAction({...editingAction, handler: e.target.value})}
+                            placeholder="handleEdit"
+                            className="h-6 text-xs"
+                          />
+                          <div className="flex items-center gap-1">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setEditingCode(editingAction.script || "// 编写操作处理脚本\n// 可用变量: payload (包含 row 和 action 数据)\n\nconsole.log('操作被点击:', payload);");
+                                setEditingField(`action-${editingIndex}`);
+                                setCodeEditorOpen(true);
+                              }}
+                              className="h-5 px-2 text-xs"
+                            >
+                              编辑脚本
+                            </Button>
+                          </div>
+                          <div 
+                            className="mt-1 p-2 bg-gray-50 rounded text-xs font-mono text-gray-600 min-h-[40px] border cursor-pointer hover:bg-gray-100 hover:border-gray-300 transition-colors"
+                            onMouseDown={() => {
+                              setEditingCode(editingAction.script || "// 编写操作处理脚本\n// 可用变量: payload (包含 row 和 action 数据)\n\nconsole.log('操作被点击:', payload);");
+                              setEditingField(`action-${editingIndex}`);
+                              setCodeEditorOpen(true);
+                            }}
+                            title="点击编辑脚本"
+                          >
+                            {editingAction.script ? (
+                              <div className="whitespace-pre-wrap">{editingAction.script.length > 60 ? editingAction.script.substring(0, 60) + '...' : editingAction.script}</div>
+                            ) : (
+                              <div className="text-gray-400">点击此处编写JavaScript代码</div>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </div>
                     
@@ -1232,52 +1288,88 @@ function ActionColumnManager({
                   </div>
                 ) : (
                   // 显示模式
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <div className="text-xs font-medium">{action.text}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {action.variant || 'ghost'}
-                        {action.icon && ` • ${action.icon}`}
-                        {action.handler && ` • ${action.handler}`}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="text-xs font-medium">{action.text}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {action.variant || 'ghost'}
+                          {action.icon && ` • ${action.icon}`}
+                          {action.handler && ` • ${action.handler}`}
+                        </div>
+                      </div>
+                      <div className="flex gap-1">
+                        {index > 0 && (
+                          <Button 
+                            size="sm" 
+                            variant="ghost" 
+                            onClick={() => moveAction(index, index - 1)}
+                            className="h-6 w-6 p-0"
+                          >
+                            <ChevronUp className="h-3 w-3" />
+                          </Button>
+                        )}
+                        {index < actions.length - 1 && (
+                          <Button 
+                            size="sm" 
+                            variant="ghost" 
+                            onClick={() => moveAction(index, index + 1)}
+                            className="h-6 w-6 p-0"
+                          >
+                            <ChevronDown className="h-3 w-3" />
+                          </Button>
+                        )}
+                        <Button 
+                          size="sm" 
+                          variant="ghost" 
+                          onClick={() => startEdit(index)}
+                          className="h-6 w-6 p-0"
+                        >
+                          <Edit className="h-3 w-3" />
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="ghost" 
+                          onClick={() => deleteAction(index)}
+                          className="h-6 w-6 p-0 text-red-500"
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
                       </div>
                     </div>
-                    <div className="flex gap-1">
-                      {index > 0 && (
-                        <Button 
-                          size="sm" 
-                          variant="ghost" 
-                          onClick={() => moveAction(index, index - 1)}
-                          className="h-6 w-6 p-0"
+                    
+                    {/* 脚本显示区域 */}
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1">
+                        <label className="text-xs text-muted-foreground">事件脚本:</label>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setEditingCode(action.script || "// 编写操作处理脚本\n// 可用变量: payload (包含 row 和 action 数据)\n\nconsole.log('操作被点击:', payload);");
+                            setEditingField(`action-${index}`);
+                            setCodeEditorOpen(true);
+                          }}
+                          className="h-4 px-1 text-xs"
                         >
-                          <ChevronUp className="h-3 w-3" />
+                          编辑脚本
                         </Button>
-                      )}
-                      {index < actions.length - 1 && (
-                        <Button 
-                          size="sm" 
-                          variant="ghost" 
-                          onClick={() => moveAction(index, index + 1)}
-                          className="h-6 w-6 p-0"
-                        >
-                          <ChevronDown className="h-3 w-3" />
-                        </Button>
-                      )}
-                      <Button 
-                        size="sm" 
-                        variant="ghost" 
-                        onClick={() => startEdit(index)}
-                        className="h-6 w-6 p-0"
+                      </div>
+                      <div 
+                        className="p-2 bg-gray-50 rounded text-xs font-mono text-gray-600 min-h-[40px] border cursor-pointer hover:bg-gray-100 hover:border-gray-300 transition-colors"
+                        onMouseDown={() => {
+                          setEditingCode(action.script || "// 编写操作处理脚本\n// 可用变量: payload (包含 row 和 action 数据)\n\nconsole.log('操作被点击:', payload);");
+                          setEditingField(`action-${index}`);
+                          setCodeEditorOpen(true);
+                        }}
+                        title="点击编辑脚本"
                       >
-                        <Edit className="h-3 w-3" />
-                      </Button>
-                      <Button 
-                        size="sm" 
-                        variant="ghost" 
-                        onClick={() => deleteAction(index)}
-                        className="h-6 w-6 p-0 text-red-500"
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
+                        {action.script ? (
+                          <div className="whitespace-pre-wrap">{action.script.length > 60 ? action.script.substring(0, 60) + '...' : action.script}</div>
+                        ) : (
+                          <div className="text-gray-400">点击此处编写JavaScript代码</div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -1400,6 +1492,22 @@ function ActionColumnManager({
           </div>
         </DialogContent>
       </Dialog>
+      
+      {/* 代码编辑器 */}
+      <CodeEditorDialog
+        open={codeEditorOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            // 关闭时自动保存
+            saveCode();
+          } else {
+            setCodeEditorOpen(open);
+          }
+        }}
+        value={editingCode}
+        onChange={setEditingCode}
+        title="操作脚本编辑器"
+      />
     </div>
   );
 }
@@ -1471,11 +1579,23 @@ function EventsPanel({
     if (!selected || !editingField) return;
     
     const events = selected.props?.events || [];
-    const eventIndex = parseInt(editingField.split('-')[1]);
+    const [fieldType, eventIndexStr] = editingField.split('-');
+    const eventIndex = parseInt(eventIndexStr);
     
     if (eventIndex >= 0 && eventIndex < events.length) {
       const next = [...events];
-      next[eventIndex] = { ...next[eventIndex], script: editingCode };
+      
+      if (fieldType === 'script' || fieldType === 'event') {
+        // 事件处理脚本编辑
+        next[eventIndex] = { ...next[eventIndex], script: editingCode };
+      } else {
+        // 处理器参数字段编辑
+        const handlerParams = next[eventIndex].handlerParams || {};
+        next[eventIndex] = { 
+          ...next[eventIndex], 
+          handlerParams: { ...handlerParams, [fieldType]: editingCode } 
+        };
+      }
       
       update({
         ...selected,
@@ -1688,6 +1808,16 @@ function EventsPanel({
     setEditingCode(currentValue);
     setCodeEditorOpen(true);
   };
+
+  // 监听代码编辑器打开事件
+  useEffect(() => {
+    const unsubscribe = bus.subscribe('codeEditor.open', (payload: any) => {
+      const { field = 'handler', currentValue = '', title = '代码编辑器' } = payload;
+      openCodeEditor(field, currentValue);
+    });
+
+    return unsubscribe;
+  }, []);
 
 
 
@@ -1925,21 +2055,25 @@ function EventsPanel({
                 </div>
                 <div className="space-y-2">
                   <div>
-                    <label className="text-xs text-muted-foreground">代码/ID</label>
-                    <Input
-                      placeholder="例如: baseCard"
-                      value={ev.handlerParams?.code || ''}
-                      onChange={(e) => {
-                        const next = [...events];
-                        const handlerParams = next[idx].handlerParams || {};
-                        next[idx] = { 
-                          ...next[idx], 
-                          handlerParams: { ...handlerParams, code: e.target.value } 
-                        };
-                        set("events", next);
-                      }}
-                      className="h-8"
-                    />
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs text-muted-foreground">代码/ID</label>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setEditingField(`code-${idx}`);
+                          setEditingCode(ev.handlerParams?.code || '');
+                          setCodeEditorOpen(true);
+                        }}
+                        className="h-6 px-2 text-xs"
+                      >
+                        <Code className="w-3 h-3 mr-1" />
+                        编辑代码
+                      </Button>
+                    </div>
+                    <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded border">
+                      {ev.handlerParams?.code || '点击"编辑代码"按钮设置代码'}
+                    </div>
                   </div>
                   <div>
                     <label className="text-xs text-muted-foreground">数据ID (可选)</label>
@@ -2113,20 +2247,26 @@ function EventsPanel({
                 ) : (
                   <div>
                     <label className="text-xs text-muted-foreground">内容</label>
-                    <Textarea
-                      placeholder="对话框内容或消息"
-                      value={ev.handlerParams?.content || ''}
-                      onChange={(e) => {
-                        const next = [...events];
-                        const handlerParams = next[idx].handlerParams || {};
-                        next[idx] = { 
-                          ...next[idx], 
-                          handlerParams: { ...handlerParams, content: e.target.value } 
-                        };
-                        set("events", next);
-                      }}
-                      className="min-h-[60px] resize-none"
-                    />
+                    <div className="border rounded-md p-2 bg-muted/50">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setEditingField(`content-${idx}`);
+                          setEditingCode(ev.handlerParams?.content || '');
+                          setCodeEditorOpen(true);
+                        }}
+                        className="w-full mb-2"
+                      >
+                        编辑内容
+                      </Button>
+                      <div className="text-xs text-muted-foreground">
+                        {ev.handlerParams?.content ? 
+                          ev.handlerParams.content.substring(0, 50) + (ev.handlerParams.content.length > 50 ? '...' : '') : 
+                          '点击编辑内容'
+                        }
+                      </div>
+                    </div>
                   </div>
                 )}
                 <div className="grid grid-cols-3 gap-2">
@@ -2439,11 +2579,19 @@ function EventsPanel({
                   编辑脚本
                 </Button>
               </div>
-              <div className="mt-1 p-2 bg-gray-50 rounded text-xs font-mono text-gray-600 min-h-[60px] border">
+              <div 
+                className="mt-1 p-2 bg-gray-50 rounded text-xs font-mono text-gray-600 min-h-[60px] border cursor-pointer hover:bg-gray-100 hover:border-gray-300 transition-colors"
+                onMouseDown={() => {
+                  setEditingCode(ev.script || "// 编写事件处理脚本\n// 可用变量: payload (事件数据)\n\nconsole.log('事件触发:', payload);");
+                  setEditingField(`event-${idx}`);
+                  setCodeEditorOpen(true);
+                }}
+                title="点击编辑脚本"
+              >
                 {ev.script ? (
                   <div className="whitespace-pre-wrap">{ev.script.length > 100 ? ev.script.substring(0, 100) + '...' : ev.script}</div>
                 ) : (
-                  <div className="text-gray-400">点击"编辑脚本"按钮编写JavaScript代码</div>
+                  <div className="text-gray-400">点击此处编写JavaScript代码</div>
                 )}
               </div>
             </div>
@@ -2586,8 +2734,25 @@ function Inspector({
   }
 
   const [local, setLocal] = useState<NodeMeta | null>(selected);
+  // JSON草稿状态，用于处理JSON输入框的编辑
+  const [jsonDrafts, setJsonDrafts] = useState<{[key: string]: string}>({});
+  // 组件挂载状态，用于防止组件卸载后的状态更新
+  const [isMounted, setIsMounted] = useState(true);
 
-  useEffect(() => setLocal(selected), [selected]);
+  useEffect(() => {
+    setIsMounted(true);
+    return () => {
+      setIsMounted(false);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isMounted) {
+      setLocal(selected);
+      // 当选中组件变化时，清空JSON草稿状态
+      setJsonDrafts({});
+    }
+  }, [selected, isMounted]);
 
   // 获取可转换的组件类型
   const getConvertibleTypes = (currentType: string) => {
@@ -2816,9 +2981,36 @@ function Inspector({
 
 
   const set = (k: string, v: any) => {
+    if (!isMounted || !local) return;
     const copy = { ...local, props: { ...(local.props ?? {}), [k]: v } } as NodeMeta;
     setLocal(copy);
     update(copy);
+  };
+
+  // 处理JSON输入的辅助函数
+  const handleJsonInput = (key: string, value: string, defaultValue: any = []) => {
+    if (!isMounted) return;
+    
+    // 更新草稿状态
+    setJsonDrafts(prev => ({ ...prev, [key]: value }));
+    
+    // 尝试解析JSON，只有成功时才更新组件属性
+    try {
+      const parsed = JSON.parse(value || JSON.stringify(defaultValue));
+      set(key, parsed);
+    } catch {
+      // JSON格式错误时不更新组件属性，但保持草稿状态
+    }
+  };
+
+  // 获取JSON输入框的值
+  const getJsonInputValue = (key: string, defaultValue: any = []) => {
+    // 如果有草稿状态，使用草稿状态
+    if (jsonDrafts[key] !== undefined) {
+      return jsonDrafts[key];
+    }
+    // 否则使用组件属性的格式化值
+    return JSON.stringify(local.props?.[key] ?? defaultValue, null, 2);
   };
 
   const setStyle = (k: string, v: string) => {
@@ -3526,12 +3718,11 @@ function Inspector({
               {(local.props?.dataSource ?? "static") === "static" && (
                 <div className="grid gap-2">
                   <label className="text-xs">静态数据 JSON(Array)</label>
-                  <Textarea rows={4} value={JSON.stringify(local.props?.data ?? [], null, 2)} onChange={(e) => {
-                    try {
-                      const v = JSON.parse(e.target.value || "[]");
-                      set("data", v);
-                    } catch {}
-                  }} />
+                  <Textarea 
+                    rows={4} 
+                    value={getJsonInputValue("data", [])} 
+                    onChange={(e) => handleJsonInput("data", e.target.value, [])} 
+                  />
                 </div>
               )}
               
@@ -3721,12 +3912,11 @@ function Inspector({
               {(local.props?.dataSource ?? "static") === "static" && (
                 <div className="grid gap-2">
                   <label className="text-xs">静态数据 JSON(Array)</label>
-                  <Textarea rows={4} value={JSON.stringify(local.props?.data ?? [], null, 2)} onChange={(e) => {
-                    try {
-                      const v = JSON.parse(e.target.value || "[]");
-                      set("data", v);
-                    } catch {}
-                  }} />
+                  <Textarea 
+                    rows={4} 
+                    value={getJsonInputValue("data", [])} 
+                    onChange={(e) => handleJsonInput("data", e.target.value, [])} 
+                  />
                 </div>
               )}
               <EditableColumnManager
@@ -3801,6 +3991,20 @@ function Inspector({
                  onShowActionsChange={(show) => set("showActions", show)}
                  onActionsChange={(actions) => set("actions", actions)}
                />
+               
+               {local.props?.showActions && (
+                 <div className="grid gap-2">
+                   <label className="text-xs">操作列固定</label>
+                   <div className="flex items-center gap-2">
+                     <Switch 
+                       id="stickyActions" 
+                       checked={local.props?.stickyActions !== false} 
+                       onCheckedChange={(checked) => set("stickyActions", checked)} 
+                     />
+                     <label htmlFor="stickyActions" className="text-xs">固定操作列</label>
+                   </div>
+                 </div>
+               )}
                
                <Separator />
                
@@ -3921,6 +4125,48 @@ function Inspector({
                      <label htmlFor="resizable" className="text-xs">可调整列宽</label>
                    </div>
                  </div>
+                 
+                 <div className="grid gap-2">
+                   <label className="text-xs">序号列</label>
+                   <div className="flex items-center gap-2">
+                     <Switch 
+                       id="showRowNumber" 
+                       checked={local.props?.showRowNumber === true} 
+                       onCheckedChange={(checked) => set("showRowNumber", checked)} 
+                     />
+                     <label htmlFor="showRowNumber" className="text-xs">显示序号列</label>
+                   </div>
+                 </div>
+                 
+                 <div className="grid gap-2">
+                   <label className="text-xs">行选择</label>
+                   <div className="flex items-center gap-2">
+                     <Switch 
+                       id="enableSelection" 
+                       checked={local.props?.enableSelection === true} 
+                       onCheckedChange={(checked) => set("enableSelection", checked)} 
+                     />
+                     <label htmlFor="enableSelection" className="text-xs">启用行选择</label>
+                   </div>
+                 </div>
+                 
+                 {local.props?.enableSelection && (
+                   <div className="grid gap-2">
+                     <label className="text-xs">选择模式</label>
+                     <Select 
+                       value={local.props?.selectionMode || "multiple"} 
+                       onValueChange={(value) => set("selectionMode", value)}
+                     >
+                       <SelectTrigger>
+                         <SelectValue />
+                       </SelectTrigger>
+                       <SelectContent>
+                         <SelectItem value="single">单选</SelectItem>
+                         <SelectItem value="multiple">多选</SelectItem>
+                       </SelectContent>
+                     </Select>
+                   </div>
+                 )}
                </div>
                
                <Separator />
@@ -4056,12 +4302,11 @@ function Inspector({
               {(local.props?.dataSource ?? "static") === "static" && (
                 <div className="grid gap-2">
                   <label className="text-xs">静态数据 JSON(Array)</label>
-                  <Textarea rows={4} value={JSON.stringify(local.props?.data ?? [], null, 2)} onChange={(e) => {
-                    try {
-                      const v = JSON.parse(e.target.value || "[]");
-                      set("data", v);
-                    } catch {}
-                  }} />
+                  <Textarea 
+                    rows={4} 
+                    value={getJsonInputValue("data", [])} 
+                    onChange={(e) => handleJsonInput("data", e.target.value, [])} 
+                  />
                 </div>
               )}
               
@@ -4129,6 +4374,15 @@ function Inspector({
                     onCheckedChange={(checked) => set("showRowNumber", checked)} 
                   />
                   <label htmlFor="showRowNumber" className="text-xs">显示行号</label>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <Switch 
+                    id="stickyActions" 
+                    checked={local.props?.stickyActions !== false} 
+                    onCheckedChange={(checked) => set("stickyActions", checked)} 
+                  />
+                  <label htmlFor="stickyActions" className="text-xs">固定操作列</label>
                 </div>
               </div>
               
@@ -6058,11 +6312,13 @@ function Inspector({
               
               {/* 自定义预设 */}
               {(local.props?.showPresets ?? true) && (
-                <div className="grid gap-2">
+                <div key="custom-presets" className="grid gap-2">
                   <label className="text-xs">自定义预设 (JSON)</label>
                   <Textarea 
+                    key={`custom-presets-textarea-${local.id}`}
                     value={JSON.stringify(local.props?.customPresets ?? [], null, 2)} 
                     onChange={(e) => {
+                      if (!isMounted) return;
                       try {
                         const presets = JSON.parse(e.target.value);
                         set("customPresets", presets);
@@ -6271,7 +6527,7 @@ function Inspector({
                 <label className="text-xs">标签页配置</label>
                 <div className="space-y-2">
                   {(local.props?.tabs || []).map((tab: any, index: number) => (
-                    <div key={index} className="border rounded p-2 space-y-2">
+                    <div key={`tab-${tab.id || index}-${local.id}`} className="border rounded p-2 space-y-2">
                       <div className="flex justify-between items-center">
                         <span className="text-xs font-medium">标签页 {index + 1}</span>
                         <Button
@@ -6563,7 +6819,21 @@ export default function Studio() {
           removePadding: true // 启用removePadding来测试智能padding系统
         }
       });
-      testPage.root.children = [headerNode, ...(testPage.root.children || [])];
+      
+      // 添加EventListener组件来监听actionClick事件
+      const eventListenerNode = createNode("Listener", {
+        props: {
+          listen: "actionClick",
+          handler: "log",
+          script: `// 监听操作按钮点击事件
+console.log("操作按钮被点击:", payload);
+console.log("行数据:", payload.row);
+console.log("操作信息:", payload.action);
+setText("操作按钮点击事件触发！行ID: " + (payload.row?.id || "未知") + ", 操作: " + (payload.action?.text || "未知"));`
+        }
+      });
+      
+      testPage.root.children = [headerNode, eventListenerNode, ...(testPage.root.children || [])];
       return testPage;
     }
   });
@@ -7940,7 +8210,7 @@ export default function Studio() {
             <TabsTrigger value="events">事件</TabsTrigger>
             <TabsTrigger value="page">页面</TabsTrigger>
           </TabsList>
-          <TabsContent value="props" className="relative flex-1 min-h-0">
+          <TabsContent value="props" className="relative flex-1 min-h-0 ml-3">
              <div className="absolute inset-0 overflow-y-auto">
               <Inspector
               selected={selected}
@@ -8008,7 +8278,7 @@ export default function Studio() {
             />
             </div>
           </TabsContent>
-          <TabsContent value="events" className="relative flex-1 min-h-0">
+          <TabsContent value="events" className="relative flex-1 min-h-0 ml-3   ">
              <div className="absolute inset-0 overflow-y-auto">
               <EventsPanel
                 selected={selected}
