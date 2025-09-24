@@ -1,0 +1,61 @@
+/* 表格尺寸样式 - 只保留有用的两种尺寸 */
+
+/* 默认尺寸 (default) - 标准显示 */
+.table-size-default {
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.table-size-default td,
+.table-size-default th {
+  padding: 8px 12px;
+  height: 40px;
+  min-height: 40px;
+}
+
+.table-size-default tr {
+  height: 40px;
+  min-height: 40px;
+}
+
+/* 大尺寸 (lg) - 稀疏显示 */
+.table-size-lg {
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+.table-size-lg td,
+.table-size-lg th {
+  padding: 16px 20px;
+  height: 56px;
+  min-height: 56px;
+}
+
+.table-size-lg tr {
+  height: 56px;
+  min-height: 56px;
+}
+
+/* 确保表格整体样式一致性 */
+.table-size-default table,
+.table-size-lg table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+/* 输入框和其他表单元素的尺寸适配 */
+.table-size-default input,
+.table-size-default select,
+.table-size-default textarea {
+  font-size: 14px;
+  padding: 4px 8px;
+  min-height: 32px;
+}
+
+.table-size-lg input,
+.table-size-lg select,
+.table-size-lg textarea {
+  font-size: 16px;
+  padding: 8px 12px;
+  min-height: 40px;
+}

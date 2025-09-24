@@ -13,6 +13,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Plus, Trash2, Edit, Save, X, Upload, Link, FileText, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { bus } from "@/lib/eventBus";
+import { useColumnDrag } from "@/studio/hooks/use-column-drag";
+import { DraggableTableHeader } from "@/studio/components/draggable-table-header";
 
 interface EditableColumn {
   key: string;
@@ -51,6 +53,9 @@ interface EditableTableProps {
   componentId?: string;
   nodeId?: string;
   stickyActions?: boolean; // 是否固定操作列到最右侧
+  actionsWidth?: string; // 操作列宽度
+  enableColumnDrag?: boolean; // 是否启用列拖拽
+  onColumnOrderChange?: (newColumns: EditableColumn[]) => void; // 列顺序变化回调
 }
 
 export function EditableTable({
@@ -68,13 +73,17 @@ export function EditableTable({
   listId,
   componentId,
   nodeId,
-  stickyActions = false
+  stickyActions = false,
+  actionsWidth = 'auto',
+  enableColumnDrag = false,
+  onColumnOrderChange
 }: EditableTableProps) {
   const [tableData, setTableData] = useState(data);
   const [editingCell, setEditingCell] = useState<{ rowIndex: number; columnKey: string } | null>(null);
   const [editingValue, setEditingValue] = useState<any>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [localColumns, setLocalColumns] = useState<EditableColumn[]>(columns);
   const [autoNumberCounter, setAutoNumberCounter] = useState(() => {
     // 计算自动编号的起始值
     const autoNumberColumns = columns.filter(col => col.type === 'autonumber');
@@ -88,9 +97,23 @@ export function EditableTable({
     return Math.max(...maxNumbers, 0) + 1;
   });
 
+  // 列拖拽功能
+  const { dragState, handleDragStart, handleDragOver, handleDragEnd, handleDrop } = useColumnDrag({
+    columns: localColumns,
+    onColumnOrderChange: (newColumns) => {
+      setLocalColumns(newColumns);
+      onColumnOrderChange?.(newColumns);
+    }
+  });
+
   useEffect(() => {
     setTableData(data);
   }, [data]);
+
+  // 同步外部传入的columns
+  useEffect(() => {
+    setLocalColumns(columns);
+  }, [columns]);
 
   // 列表刷新功能
   useEffect(() => {
@@ -147,7 +170,7 @@ export function EditableTable({
   const handleCellEdit = (rowIndex: number, columnKey: string, currentValue: any) => {
     if (!allowEdit) return;
     
-    const column = columns.find(col => col.key === columnKey);
+    const column = localColumns.find(col => col.key === columnKey);
     if (!column || column.editable === false) return;
 
     setEditingCell({ rowIndex, columnKey });
@@ -185,7 +208,7 @@ export function EditableTable({
     if (!allowAdd) return;
 
     const newRow: any = {};
-    columns.forEach(column => {
+    localColumns.forEach(column => {
       if (column.type === 'autonumber') {
         newRow[column.key] = autoNumberCounter;
       } else {
@@ -528,13 +551,37 @@ export function EditableTable({
            >
             <TableHeader>
               <TableRow>
-                {columns.map(column => (
-                  <TableHead key={column.key} style={{ width: column.width }}>
-                    <div className="flex items-center gap-1">
-                      {column.title}
-                      {column.required && <span className="text-red-500">*</span>}
-                    </div>
-                  </TableHead>
+                {localColumns.map((column, index) => (
+                  enableColumnDrag ? (
+                    <DraggableTableHeader
+                      key={column.key}
+                      column={{
+                        key: column.key,
+                        title: column.title,
+                        width: column.width,
+                        sortable: false,
+                        filterable: false
+                      }}
+                      index={index}
+                      dragState={dragState}
+                      onDragStart={handleDragStart}
+                      onDragOver={handleDragOver}
+                      onDragEnd={handleDragEnd}
+                      onDrop={handleDrop}
+                    >
+                      <div className="flex items-center gap-1">
+                        {column.title}
+                        {column.required && <span className="text-red-500">*</span>}
+                      </div>
+                    </DraggableTableHeader>
+                  ) : (
+                    <TableHead key={column.key} style={{ width: column.width }}>
+                      <div className="flex items-center gap-1">
+                        {column.title}
+                        {column.required && <span className="text-red-500">*</span>}
+                      </div>
+                    </TableHead>
+                  )
                 ))}
                 {allowDelete && (
                   <TableHead 
@@ -542,6 +589,7 @@ export function EditableTable({
                       "w-16",
                       stickyActions && "sticky right-0 bg-background border-l shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.1)]"
                     )}
+                    style={{ width: actionsWidth }}
                   >
                     操作
                   </TableHead>
@@ -552,7 +600,7 @@ export function EditableTable({
             {paginatedData.length === 0 ? (
               <TableRow>
                 <TableCell 
-                  colSpan={columns.length + (allowDelete ? 1 : 0)} 
+                  colSpan={localColumns.length + (allowDelete ? 1 : 0)} 
                   className="text-center py-8 text-muted-foreground"
                 >
                   暂无数据
@@ -561,7 +609,7 @@ export function EditableTable({
             ) : (
               paginatedData.map((row, rowIndex) => (
                 <TableRow key={rowIndex}>
-                  {columns.map(column => (
+                  {localColumns.map(column => (
                     <TableCell key={column.key}>
                       {renderCellContent(row, column, rowIndex)}
                     </TableCell>
@@ -571,6 +619,7 @@ export function EditableTable({
                       className={cn(
                         stickyActions && "sticky right-0 bg-background border-l shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.1)]"
                       )}
+                      style={{ width: actionsWidth }}
                     >
                       <Button
                         size="sm"

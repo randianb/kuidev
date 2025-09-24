@@ -4003,6 +4003,20 @@ function Inspector({
                      />
                      <label htmlFor="stickyActions" className="text-xs">固定操作列</label>
                    </div>
+                   
+                   <div className="grid gap-2">
+                     <label className="text-xs">操作列宽度</label>
+                     <Input
+                       type="text"
+                       placeholder="auto (如: 120px, 10rem, auto)"
+                       value={local.props?.actionsWidth || ""}
+                       onChange={(e) => set("actionsWidth", e.target.value)}
+                       className="h-8"
+                     />
+                     <div className="text-xs text-muted-foreground">
+                       留空或设为 auto 则根据内容自适应
+                     </div>
+                   </div>
                  </div>
                )}
                
@@ -4019,11 +4033,13 @@ function Inspector({
                        <SelectValue />
                      </SelectTrigger>
                      <SelectContent>
-                       <SelectItem value="sm">小</SelectItem>
                        <SelectItem value="default">默认</SelectItem>
-                       <SelectItem value="lg">大</SelectItem>
+                       <SelectItem value="xl">大</SelectItem>
                      </SelectContent>
                    </Select>
+                   <div className="text-xs text-muted-foreground">
+                     控制表格行高、字体大小和内边距
+                   </div>
                  </div>
                  
                  <div className="grid gap-2">
@@ -4167,6 +4183,18 @@ function Inspector({
                      </Select>
                    </div>
                  )}
+                 
+                 <div className="grid gap-2">
+                   <label className="text-xs">列拖拽</label>
+                   <div className="flex items-center gap-2">
+                     <Switch 
+                       id="enableColumnDrag" 
+                       checked={local.props?.enableColumnDrag === true} 
+                       onCheckedChange={(checked) => set("enableColumnDrag", checked)} 
+                     />
+                     <label htmlFor="enableColumnDrag" className="text-xs">启用列拖拽</label>
+                   </div>
+                 </div>
                </div>
                
                <Separator />
@@ -4384,6 +4412,29 @@ function Inspector({
                   />
                   <label htmlFor="stickyActions" className="text-xs">固定操作列</label>
                 </div>
+                
+                <div className="flex items-center gap-2">
+                  <Switch 
+                    id="enableColumnDragEditable" 
+                    checked={local.props?.enableColumnDrag !== false} 
+                    onCheckedChange={(checked) => set("enableColumnDrag", checked)} 
+                  />
+                  <label htmlFor="enableColumnDragEditable" className="text-xs">启用列拖拽</label>
+                </div>
+                
+                <div className="grid gap-2">
+                  <label className="text-xs">操作列宽度</label>
+                  <Input
+                    type="text"
+                    placeholder="auto (如: 120px, 10rem, auto)"
+                    value={local.props?.actionsWidth || ""}
+                    onChange={(e) => set("actionsWidth", e.target.value)}
+                    className="h-8"
+                  />
+                  <div className="text-xs text-muted-foreground">
+                    留空或设为 auto 则根据内容自适应
+                  </div>
+                </div>
               </div>
               
               <Separator />
@@ -4399,11 +4450,13 @@ function Inspector({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="sm">小</SelectItem>
                       <SelectItem value="default">默认</SelectItem>
-                      <SelectItem value="lg">大</SelectItem>
+                      <SelectItem value="xl">大</SelectItem>
                     </SelectContent>
                   </Select>
+                  <div className="text-xs text-muted-foreground">
+                    控制表格行高、字体大小和内边距
+                  </div>
                 </div>
                 
                 <div className="grid gap-2">

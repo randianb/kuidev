@@ -15,7 +15,7 @@ import Header from "@/components/site/Header";
 import Guide from "./pages/Guide";
 import Studio from "./pages/Studio";
 import CleanPreview from "./pages/CleanPreview";
-
+    
 const queryClient = new QueryClient();
 
 // SPA导航事件监听组件
@@ -50,7 +50,8 @@ const App = () => (
         <Routes>
           {/* 预览页面独立渲染，不包含头部 */}
           <Route path="/preview/:id" element={<CleanPreview />} />
-          
+          <Route path="/cr_runtime/:id" element={<CleanPreview />} />
+           
           {/* 其他页面包含头部和布局 */}
           <Route path="/*" element={
             <div className="flex h-screen flex-col overflow-hidden">

@@ -17,6 +17,13 @@ export default defineConfig(({ mode }) => ({
     outDir: "dist/spa",
   },
   plugins: [react(), expressPlugin()],
+  define: {
+    __APP_METADATA__: JSON.stringify({
+      version: process.env.npm_package_version,
+      buildTime: new Date().toISOString(),
+      // 可以添加更多元数据
+    }),
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./client"),

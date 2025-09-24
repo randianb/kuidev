@@ -59,6 +59,8 @@ import { PageContentWrapper } from "./components/animated-page-container";
 import { pagePreloader } from "./page-preloader";
 import type { NodeMeta, PageMeta } from "./types";
 import { getSpacingClasses, getDefaultSpacing, mergeSpacingConfig } from "./utils/spacing";
+import { useColumnDrag } from "./hooks/use-column-drag";
+import { DraggableTableHeader } from "./components/draggable-table-header";
 
 // 页面内容渲染组件
 // 递归渲染页面内容的组件
@@ -888,7 +890,11 @@ export const registry: Record<string, Renderer> = {
         variant={node.props?.variant ?? "default"}
         size={node.props?.size ?? "default"}
         disabled={isDisabled || isLoading}
-        className={node.props?.className}
+        className={cn(
+          node.props?.className,
+          node.props?.size === "default" && "table-size-default",
+          node.props?.size === "lg" && "table-size-lg"
+        )}
       >
         {renderContent()}
       </Button>
@@ -1042,7 +1048,11 @@ export const registry: Record<string, Renderer> = {
       >
         <Textarea 
           placeholder={node.props?.placeholder ?? "请输入..."} 
-          className={node.props?.className}
+          className={cn(
+          node.props?.className,
+          node.props?.size === 'default' && 'table-size-default',
+          node.props?.size === 'lg' && 'table-size-lg'
+        )}
           value={value}
           onChange={(e) => {
             setValue(e.target.value);
@@ -1114,7 +1124,11 @@ export const registry: Record<string, Renderer> = {
                 });
               }
             }}
-            className={node.props?.className}
+            className={cn(
+          node.props?.className,
+          node.props?.size === 'default' && 'table-size-default',
+          node.props?.size === 'lg' && 'table-size-lg'
+        )}
           />
           {node.props?.label && (
             <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
@@ -1154,8 +1168,12 @@ export const registry: Record<string, Renderer> = {
               });
             }
           }}
-          className={node.props?.className} 
-        />
+        className={cn(
+          node.props?.className,
+          node.props?.size === 'default' && 'table-size-default',
+          node.props?.size === 'lg' && 'table-size-lg'
+        )}
+       />
       </FormLabel>
     );
   },
@@ -1932,6 +1950,20 @@ export const registry: Record<string, Renderer> = {
     
     const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
     
+    // 列拖拽功能
+    const enableColumnDrag = node.props?.enableColumnDrag ?? false;
+    const [columns, setColumns] = useState(() => node.props?.columns ?? []);
+    const { dragState, handlers } = useColumnDrag(columns, (newColumns) => {
+      setColumns(newColumns);
+      // 触发列顺序变化事件
+      if (node.props?.events) {
+        (node.props.events as any[]).forEach((ev) => 
+          ev?.type === 'columnOrderChange' && ev?.handler && 
+          execHandler(ev.handler, { columns: newColumns })
+        );
+      }
+    });
+    
     // 通用属性处理
     if (node.props?.disabled) {
       return <div className="opacity-50 pointer-events-none w-full overflow-x-auto"><Table className={node.props?.className}><TableBody><TableRow><TableCell>表格已禁用</TableCell></TableRow></TableBody></Table></div>;
@@ -1943,6 +1975,8 @@ export const registry: Record<string, Renderer> = {
     // 操作列配置
     const actions = node.props?.actions ?? [];
     const showActions = node.props?.showActions ?? false;
+    const stickyActions = node.props?.stickyActions ?? false;
+    const actionsWidth = node.props?.actionsWidth || 'auto';
     
     // 图标映射
     const iconMap: Record<string, React.ReactNode> = {
@@ -1991,19 +2025,13 @@ export const registry: Record<string, Renderer> = {
         return () => unsub();
       }
     }, [node.props?.dataSource, node.props?.url, node.props?.topic]);
-    // 列配置增强
-    const columns: Array<{
-      key: string;
-      title: string;
-      width?: string | number;
-      align?: 'left' | 'center' | 'right';
-      sortable?: boolean;
-      filterable?: boolean;
-      render?: 'text' | 'link' | 'image' | 'badge' | 'date' | 'currency' | 'custom';
-      format?: string; // 用于日期、货币等格式化
-      ellipsis?: boolean; // 文本溢出省略
-      fixed?: 'left' | 'right'; // 固定列
-    }> = node.props?.columns ?? [];
+    
+    // 同步外部列配置变化
+    useEffect(() => {
+      if (node.props?.columns) {
+        setColumns(node.props.columns);
+      }
+    }, [node.props?.columns]);
     
     // 数据处理：搜索、筛选、排序
     const processedRows = useMemo(() => {
@@ -2237,7 +2265,11 @@ export const registry: Record<string, Renderer> = {
         {(pagerPosition === 'top' || pagerPosition === 'both') && renderPager()}
         
         <div className="w-full overflow-x-auto">
-          <Table className={node.props?.className}>
+          <Table className={cn(
+            node.props?.className,
+            node.props?.size === "default" && "table-size-default",
+            node.props?.size === "lg" && "table-size-lg"
+          )}>
             <TableHeader>
               <TableRow>
                 {/* 选择列 */}
@@ -2273,49 +2305,38 @@ export const registry: Record<string, Renderer> = {
                 )}
                 
                 {columns.map((c, index) => (
-                  <TableHead 
-                    key={c.key} 
+                  <DraggableTableHeader
+                    key={c.key}
+                    index={index}
+                    title={c.title}
+                    width={columnWidths[c.key] || c.width}
+                    align={c.align}
+                    sortable={enableSort && (c.sortable !== false)}
                     className={cn(
-                      "relative",
-                      node.props?.variant === "compact" && "px-1 py-0.5",
-                      c.align === 'center' && "text-center",
-                      c.align === 'right' && "text-right"
+                      node.props?.variant === "compact" && "px-1 py-0.5"
                     )}
-                    style={{ width: columnWidths[c.key] || c.width }}
+                    dragState={dragState}
+                    handlers={handlers}
+                    onSort={() => {
+                      if (enableSort && (c.sortable !== false)) {
+                        setSortConfig(prev => {
+                          if (prev?.key === c.key) {
+                            return prev.direction === 'asc' 
+                              ? { key: c.key, direction: 'desc' }
+                              : null;
+                          } else {
+                            return { key: c.key, direction: 'asc' };
+                          }
+                        });
+                      }
+                    }}
+                    sortConfig={sortConfig}
+                    columnKey={c.key}
+                    enableDrag={enableColumnDrag}
                   >
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-1">
-                        <span 
-                          className={cn(
-                            "flex items-center gap-1",
-                            (enableSort && (c.sortable !== false)) && "cursor-pointer hover:text-foreground"
-                          )}
-                          onClick={() => {
-                            if (enableSort && (c.sortable !== false)) {
-                              setSortConfig(prev => {
-                                if (prev?.key === c.key) {
-                                  return prev.direction === 'asc' 
-                                    ? { key: c.key, direction: 'desc' }
-                                    : null;
-                                } else {
-                                  return { key: c.key, direction: 'asc' };
-                                }
-                              });
-                            }
-                          }}
-                        >
-                          {c.title}
-                          {enableSort && (c.sortable !== false) && (
-                            <ArrowUpDown className={cn(
-                              "h-3 w-3",
-                              sortConfig?.key === c.key ? "opacity-100" : "opacity-50"
-                            )} />
-                          )}
-                        </span>
-                      </div>
-                      
-                      {/* 筛选输入框 */}
-                      {enableFilter && (c.filterable !== false) && (
+                    {/* 筛选输入框 */}
+                    {enableFilter && (c.filterable !== false) && (
+                      <div className="mt-1">
                         <Input
                           placeholder="筛选..."
                           value={filters[c.key] || ''}
@@ -2326,8 +2347,8 @@ export const registry: Record<string, Renderer> = {
                           className="h-6 text-xs"
                           onClick={(e) => e.stopPropagation()}
                         />
-                      )}
-                    </div>
+                      </div>
+                    )}
                     
                     {/* 列调整大小手柄 */}
                     {enableResize && index < columns.length - 1 && (
@@ -2359,10 +2380,16 @@ export const registry: Record<string, Renderer> = {
                         <GripVertical className="h-3 w-3 opacity-0 group-hover:opacity-100 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" />
                       </div>
                     )}
-                  </TableHead>
+                  </DraggableTableHeader>
                 ))}
                 {showActions && (
-                  <TableHead className={cn(node.props?.variant === "compact" && "px-1 py-0.5")}>操作</TableHead>
+                  <TableHead 
+                    className={cn(
+                      node.props?.variant === "compact" && "px-1 py-0.5",
+                      stickyActions && "sticky right-0 bg-background border-l shadow-sm z-10"
+                    )}
+                    style={{ width: actionsWidth }}
+                  >操作</TableHead>
                 )}
               </TableRow>
             </TableHeader>
@@ -2442,7 +2469,13 @@ export const registry: Record<string, Renderer> = {
                       </TableCell>
                     ))}
                     {showActions && (
-                      <TableCell className={cn(node.props?.variant === "compact" && "px-1 py-0.5")}>
+                      <TableCell 
+                        className={cn(
+                          node.props?.variant === "compact" && "px-1 py-0.5",
+                          stickyActions && "sticky right-0 bg-background border-l shadow-sm z-10"
+                        )}
+                        style={{ width: actionsWidth }}
+                      >
                         <div className="flex items-center gap-1">
                           {actions.map((action: any, actionIdx: number) => (
                             <Button
@@ -2556,6 +2589,8 @@ export const registry: Record<string, Renderer> = {
          allowEdit={node.props?.allowEdit ?? true}
          allowRefresh={node.props?.allowRefresh ?? true}
          stickyActions={node.props?.stickyActions ?? true}
+         actionsWidth={node.props?.actionsWidth || 'auto'}
+         enableColumnDrag={node.props?.enableColumnDrag ?? true}
          listId={node.props?.listId || node.id}
          componentId={node.id}
          nodeId={node.id}
@@ -2599,7 +2634,19 @@ export const registry: Record<string, Renderer> = {
             );
           }
         }}
-        className={node.props?.className}
+        onColumnOrderChange={(newColumns) => {
+          if (node.props?.events) {
+            (node.props.events as any[]).forEach((ev) => 
+              ev?.type === 'columnOrderChange' && ev?.handler && 
+              execHandler(ev.handler, { columns: newColumns })
+            );
+          }
+        }}
+        className={cn(
+          node.props?.className,
+          node.props?.size === 'default' && 'table-size-default',
+          node.props?.size === 'lg' && 'table-size-lg'
+        )}
       />
     );
   },
