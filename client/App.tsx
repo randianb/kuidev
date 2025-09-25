@@ -50,7 +50,6 @@ const App = () => (
         <Routes>
           {/* 预览页面独立渲染，不包含头部 */}
           <Route path="/preview/:id" element={<CleanPreview />} />
-          <Route path="/cr_runtime/:id" element={<CleanPreview />} />
            
           {/* 其他页面包含头部和布局 */}
           <Route path="/*" element={

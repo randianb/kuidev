@@ -13,6 +13,14 @@ export function applyTheme(theme: ThemeDef) {
     root.style.setProperty(`--${key}`, value);
   }
   root.setAttribute("data-theme", theme.id);
+  
+  // 根据主题ID添加或移除 dark 类
+  if (theme.id.includes("dark")) {
+    root.classList.add("dark");
+  } else {
+    root.classList.remove("dark");
+  }
+  
   localStorage.setItem("app.theme", theme.id);
 }
 

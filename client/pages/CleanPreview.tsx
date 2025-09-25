@@ -8,47 +8,7 @@ import { PageMeta, getPageRoots } from "@/studio/types";
 
 import navigationHistory from "@/lib/navigation-history";
 
-// 自定义预览弹框组件，解决样式问题
-function PreviewDialog({ open, onOpenChange, title, content }: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  title?: string;
-  content?: any;
-}) {
-  if (!open) return null;
 
-  return (
-    <div 
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) {
-          onOpenChange(false);
-        }
-      }}
-    >
-      <div 
-        className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 max-w-md w-full mx-4 border border-gray-200 dark:border-gray-700"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-            {title ?? "提示"}
-          </h3>
-          <button
-            onClick={() => onOpenChange(false)}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-xl leading-none"
-          >
-            ×
-          </button>
-        </div>
-        <div className="text-gray-700 dark:text-gray-300">
-          {String(content ?? "")}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 interface RuntimePreviewProps {
   pageData?: PageMeta;
@@ -67,47 +27,56 @@ export default function RuntimePreview({ pageData, pageId }: RuntimePreviewProps
 
   // 从路由参数、URL参数或localStorage获取页面数据
   useEffect(() => {
-    if (!pageData && !page) {
-      setInitialLoading(true);
-      
-      // 优先从路由参数获取页面ID
-      const routePageId = params.id;
-      // 备用：从URL查询参数获取页面ID
-      const urlParams = new URLSearchParams(window.location.search);
-      const urlPageId = pageId || routePageId || urlParams.get('id');
-      
-      if (urlPageId) {
-        // 尝试从localStorage获取页面数据
-        try {
-          const storedPages = localStorage.getItem('studio.pages');
-          if (storedPages) {
-            const pages = JSON.parse(storedPages);
-            const foundPage = pages.find((p: PageMeta) => p.id === urlPageId);
-            if (foundPage) {
-              setPage(foundPage);
-              setInitialLoading(false);
-              return;
-            }
+    if (pageData) {
+      setPage(pageData);
+      setInitialLoading(false);
+      return;
+    }
+
+    if (page) {
+      setInitialLoading(false);
+      return;
+    }
+
+    setInitialLoading(true);
+
+    // 优先从路由参数获取页面ID
+    const routePageId = params.id;
+    // 备用：从URL查询参数获取页面ID
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlPageId = pageId || routePageId || urlParams.get('id');
+
+    let found = false;
+    if (urlPageId) {
+      // 尝试从localStorage获取页面数据
+      try {
+        const storedPages = localStorage.getItem('studio.pages');
+        if (storedPages) {
+          const pages = JSON.parse(storedPages);
+          const foundPage = pages.find((p: PageMeta) => p.id === urlPageId);
+          if (foundPage) {
+            setPage(foundPage);
+            found = true;
           }
-        } catch (err) {
-          console.error('获取页面数据失败:', err);
         }
-        
-        // 如果localStorage中没有找到，直接关闭加载状态
-        setInitialLoading(false);
-      } else {
-        setInitialLoading(false);
+      } catch (err) {
+        console.error('获取页面数据失败:', err);
       }
-      
-      // 尝试从全局变量获取页面数据（如果有的话）
-      if (!page && (window as any).pageData) {
-        setPage((window as any).pageData);
-        setInitialLoading(false);
-      }
+    }
+
+    // 尝试从全局变量获取页面数据（如果有的话）
+    if (!found && (window as any).pageData) {
+      setPage((window as any).pageData);
+      found = true;
+    }
+
+    if (found) {
+      setInitialLoading(false);
     } else {
+      // 如果最终没有找到页面数据，也应该关闭初始加载状态
       setInitialLoading(false);
     }
-  }, [pageData, pageId, page]);
+  }, [pageData, pageId, page, params.id]);
 
   useEffect(() => {
     const unsubDialog = bus.subscribe("dialog.open", (payload: any) => {
@@ -162,8 +131,8 @@ export default function RuntimePreview({ pageData, pageId }: RuntimePreviewProps
 
   useEffect(() => {
     // 如果页面有ID或编码，自动获取表单数据
-    // 但只在页面首次加载时执行，避免导航时重复执行
-    if (page && (page.id || page.root?.code) && !initialLoading) {
+    // 仅当页面数据已加载且不是初始加载状态时才执行
+    if (page && (page.id || page.root?.code) && !initialLoading && !loading) {
       setLoading(true);
       setError(null);
       
@@ -172,6 +141,16 @@ export default function RuntimePreview({ pageData, pageId }: RuntimePreviewProps
           id: page.id,
           code: page.root?.code,
           type: 'page'
+        }).then(() => {
+          // 如果 form.data.resolved 没有及时触发，一段时间后关闭加载状态
+          setTimeout(() => {
+            setLoading(false);
+          }, 5000); // 5秒后关闭加载状态
+        }).catch((err: any) => {
+          console.error('页面数据获取失败:', err);
+          setError(err.message || '数据获取失败');
+          setLoading(false);
+          setFormData(null); // 清除可能存在的旧数据
         });
       } catch (err: any) {
         console.error('页面数据获取失败:', err);
@@ -236,19 +215,44 @@ export default function RuntimePreview({ pageData, pageId }: RuntimePreviewProps
   const roots = getPageRoots(page);
   
   return (
-    <div className="h-screen w-screen flex flex-col">
-      {/* 页面内容 */}
+    <div className="min-h-screen w-screen flex flex-col">
+      {loading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-75 z-50">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <div className="text-lg font-medium mb-2">加载中...</div>
+            <div className="text-sm text-gray-500">正在获取页面数据</div>
+          </div>
+        </div>
+      )}
+
+      {error && (
+        <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-75 z-50">
+          <div className="text-center text-red-600">
+            <div className="text-lg font-medium mb-2">加载失败</div>
+            <div className="text-sm text-gray-500">{error}</div>
+          </div>
+        </div>
+      )}
+
       <div className="flex-1 overflow-auto">
-        {roots.map((root) => (
-          <NodeRenderer key={root.id} node={root} ctx={{}} />
+        {roots.map((node: any) => (
+          <NodeRenderer key={node.id} node={node} ctx={{}} />
         ))}
       </div>
-      <PreviewDialog 
-        open={open} 
-        onOpenChange={handleDialogClose}
-        title={dlg?.title}
-        content={dlg?.content}
-      />
+
+      <Dialog open={open} onOpenChange={handleDialogClose}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{dlg?.title}</DialogTitle>
+          </DialogHeader>
+          {dlg?.content}
+        </DialogContent>
+      </Dialog>
+      
+
+
+
     </div>
   );
 }

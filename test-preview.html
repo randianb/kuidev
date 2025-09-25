@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CleanPreview 测试页面</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            border-left: 4px solid #007bff;
+            background-color: #f8f9fa;
+        }
+        .test-link {
+            display: inline-block;
+            margin: 10px 0;
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+        .test-link:hover {
+            background-color: #0056b3;
+        }
+        .code {
+            background-color: #f1f1f1;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            margin: 10px 0;
+            overflow-x: auto;
+        }
+        .note {
+            color: #666;
+            font-style: italic;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>CleanPreview 独立预览测试</h1>
+        
+        <div class="section">
+            <h3>1. 通过本地文件访问</h3>
+            <p>直接打开构建后的文件：</p>
+            <a href="dist/preview-app/preview-app.html" class="test-link" target="_blank">打开预览页面</a>
+            <div class="note">注意：需要在浏览器中允许本地文件访问</div>
+        </div>
+
+        <div class="section">
+            <h3>2. 通过本地服务器访问</h3>
+            <p>启动本地服务器后访问：</p>
+            <div class="code">npx serve dist/preview-app -p 3000</div>
+            <a href="http://localhost:3000/preview-app.html" class="test-link" target="_blank">本地服务器预览</a>
+        </div>
+
+        <div class="section">
+            <h3>3. 通过URL参数传递页面ID</h3>
+            <p>使用 ?id=页面ID 参数：</p>
+            <div class="code">http://localhost:3000/preview-app.html?id=YOUR_PAGE_ID</div>
+            <a href="http://localhost:3000/preview-app.html?id=test-page" class="test-link" target="_blank">测试页面ID</a>
+        </div>
+
+        <div class="section">
+            <h3>4. 通过URL参数直接传递页面数据</h3>
+            <p>使用 ?data=BASE64_ENCODED_DATA 参数：</p>
+            <div class="code">http://localhost:3000/preview-app.html?data=eyJpZCI6InRlc3QiLCJuYW1lIjoiVGVzdCBQYWdlIn0=</div>
+            <div class="note">数据需要是Base64编码的JSON格式</div>
+        </div>
+
+        <div class="section">
+            <h3>5. 通过全局变量传递数据</h3>
+            <p>在页面中设置全局变量：</p>
+            <div class="code">
+&lt;script&gt;
+  window.pageData = {
+    id: "your-page-id",
+    name: "页面名称",
+    root: { /* 页面结构数据 */ }
+  };
+&lt;/script&gt;
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>6. 通过localStorage传递数据</h3>
+            <p>在控制台设置：</p>
+            <div class="code">
+const pages = [{id: "test", name: "测试页面", root: {/*...*/}}];
+localStorage.setItem('studio.pages', JSON.stringify(pages));
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>构建命令</h3>
+            <div class="code">npm run build:preview-app</div>
+            <p>构建输出目录：<code>dist/preview-app/</code></p>
+        </div>
+
+        <div class="section">
+            <h3>测试数据示例</h3>
+            <p>使用以下JavaScript在控制台添加测试数据：</p>
+            <div class="code">
+const testPage = {
+  id: "d1cfee40-aa8e-4398-9561-ed734a8a4141",
+  name: "测试页面",
+  root: {
+    id: "root",
+    type: "div",
+    props: { className: "p-4" },
+    children: [
+      { type: "h1", props: { children: "Hello World" } },
+      { type: "p", props: { children: "这是一个测试页面" } }
+    ]
+  }
+};
+localStorage.setItem('studio.pages', JSON.stringify([testPage]));
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 添加测试按钮功能
+        function addTestData() {
+            const testPage = {
+                id: "d1cfee40-aa8e-4398-9561-ed734a8a4141",
+                name: "测试页面",
+                root: {
+                    id: "root",
+                    type: "div",
+                    props: { className: "p-8 text-center" },
+                    children: [
+                        { type: "h1", props: { children: "测试成功！" } },
+                        { type: "p", props: { children: "页面数据已正确加载" } }
+                    ]
+                }
+            };
+            localStorage.setItem('studio.pages', JSON.stringify([testPage]));
+            alert('测试数据已添加到localStorage！现在可以通过 ?id=d1cfee40-aa8e-4398-9561-ed734a8a4141 访问');
+        }
+    </script>
+
+    <div style="text-align: center; margin-top: 30px;">
+        <button onclick="addTestData()" style="background-color: #28a745; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer;">
+            添加测试数据到localStorage
+        </button>
+    </div>
+</body>
+</html>
