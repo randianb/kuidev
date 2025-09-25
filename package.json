@@ -16,6 +16,7 @@
     "build:client": "vite build",
     "build:server": "vite build --config vite.config.server.ts",
     "build:preview-app": "vite build --config vite.config.preview-app.ts",
+    "dev:preview": "vite --config vite.config.preview-app.ts  --port 3000",
     "preview": "vite preview --config vite.config.preview-app.ts --port 3000",
     "start": "node dist/server/node-build.mjs",
     "test": "vitest --run",

@@ -734,7 +734,7 @@ export const registry: Record<string, Renderer> = {
         <div className={cn(
           // 根据layout和flexEnabled决定布局方式
           node.layout === "col" 
-            ? (node.flexEnabled ? "flex flex-col gap-3" : node.alignItems === "end" ? "flex flex-col gap-3 justify-end" : "space-y-3")
+            ? (node.flexEnabled ? "flex flex-col gap-3" : node.alignItems === "end" ? "flex flex-col gap-3 justify-end" : "")
             : "flex gap-3 flex-row",
           // 添加alignItems支持 - 对于flex布局
           node.alignItems && node.flexEnabled && 
