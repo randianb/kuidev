@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { getPageFast } from '../page-metadata-manager';
 import { pagePreloader, smartPreload } from '../page-preloader';
 import type { PageMeta } from '../types';
+import { getCachedPage } from '../page-cache';
 
 interface UsePageDataResult {
   pageData: PageMeta | null;

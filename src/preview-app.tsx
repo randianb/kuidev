@@ -1,3 +1,4 @@
+import '../client/global.css';
 import React, { useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import CleanPreview from '../client/pages/CleanPreview'
