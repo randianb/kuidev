@@ -227,12 +227,14 @@ export default function RuntimePreview({ pageData, pageId }: RuntimePreviewProps
       )}
 
       {error && (
-        <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-75 z-50">
-          <div className="text-center text-red-600">
-            <div className="text-lg font-medium mb-2">加载失败</div>
-            <div className="text-sm text-gray-500">{error}</div>
-          </div>
-        </div>
+        //todo 暂时屏蔽异常
+        <div></div>
+        // <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-75 z-50">
+        //   <div className="text-center text-red-600">
+        //     <div className="text-lg font-medium mb-2">加载失败</div>
+        //     <div className="text-sm text-gray-500">{error}</div>
+        //   </div>
+        // </div>
       )}
 
       <div className="flex-1 overflow-auto">

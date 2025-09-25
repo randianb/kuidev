@@ -164,12 +164,64 @@ export const themes: ThemeDef[] = (() => {
   });
 
   const radii = ["0.375rem", "0.5rem", "0.75rem", "1rem", "9999px"]; // 方/微圆/圆润/更圆/胶囊
+  // 自定义亮色主题中文命名
+  const lightNames = [
+    "樱桃红",  // 0
+    "番茄橙",  // 12
+    "橘子",    // 20
+    "琥珀",    // 28
+    "蜂蜜",    // 36
+    "柠檬",    // 44
+    "金麦",    // 52
+    "向日葵",  // 60
+    "青苹果",  // 72
+    "薄荷",    // 84
+    "青瓷",    // 96
+    "翡翠",    // 108
+    "竹绿",    // 120
+    "孔雀绿",  // 132
+    "松石",    // 144
+    "青宝石",  // 156
+    "天青",    // 168
+    "湖蓝",    // 180
+    "蔚蓝",    // 192
+    "海岸蓝",  // 204
+    "靛蓝",    // 216
+    "深紫罗兰",// 228
+    "紫水晶",  // 240
+    "薰衣草",  // 252
+    "紫藤",    // 264
+    "紫罗兰",  // 276
+    "桃粉",    // 288
+    "山茶粉",  // 300
+    "珊瑚粉",  // 312
+    "茜红",    // 324
+    "玫瑰红",  // 336
+    "石榴红"   // 348
+  ];
   baseHues.forEach((h, i) => {
-    out.push(createTheme(`light-${i}`, `亮色·${h}°`, h, undefined, radii[i % radii.length]));
+    const fancyName = lightNames[i] ?? `亮色·${h}°`;
+    out.push(createTheme(`light-${i}`, fancyName, h, undefined, radii[i % radii.length]));
   });
   // pick 12 dark variations for diversity
+  // 自定义暗色主题的中文命名，参考 tweakcn 的命名风格
+  const darkNames = [
+    "霓虹紫", // 250
+    "极光粉", // 280
+    "深海蓝", // 200
+    "雨林绿", // 160
+    "青柠",   // 120
+    "日落黄", // 90
+    "沙漠橙", // 60
+    "珊瑚红", // 30
+    "午夜黑", // 0
+    "暮霞",   // 330
+    "樱桃",   // 300
+    "薰衣草"  // 270
+  ];
   [250, 280, 200, 160, 120, 90, 60, 30, 0, 330, 300, 270].forEach((h, idx) => {
-    out.push(createDark(`dark-${idx}`, `暗色·${h}°`, h, undefined, radii[(idx + 2) % radii.length]));
+    const fancyName = darkNames[idx] ?? `暗色·${h}°`;
+    out.push(createDark(`dark-${idx}`, fancyName, h, undefined, radii[(idx + 2) % radii.length]));
   });
   return out; // 2 + 33 + 12 = 47
 })();
