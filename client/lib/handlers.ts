@@ -203,63 +203,116 @@ const handlers: Record<string, NamedHandler> = {
       return;
     }
     
-    // 原有的API调用逻辑
+    // 检查必要参数
     if (!id && !code) {
       console.error('resolvefetch: 需要提供 id、code 或 script 参数');
       return;
     }
     
     try {
-      let response;
-      let formData;
+      let formData = null;
+      let dataSource = 'api';
       
-      if (sendFormData) {
-        // POST 请求：发送当前表单数据
-        const currentFormData = ctx.getAllFormValues();
-        console.log('发送表单数据到后端:', currentFormData);
-        
-        response = await fetch('/api/resolve-form', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            id,
-            code,
-            type,
-            formData: currentFormData
-          })
-        });
-      } else {
-        // GET 请求：获取模板数据（原有逻辑）
-        const queryParams = new URLSearchParams();
-        if (id) queryParams.append('id', id);
-        if (code) queryParams.append('code', code);
-        queryParams.append('type', type);
-        if (getFormData) queryParams.append('getFormData', 'true');
-        
-        response = await fetch(`/api/resolve-form?${queryParams.toString()}`);
+      // 优先从 localStorage 获取页面数据
+      if (type === 'page' && (id || code)) {
+        try {
+          const storedPages = localStorage.getItem('studio.pages');
+          if (storedPages) {
+            const pages = JSON.parse(storedPages);
+            let foundPage = null;
+            
+            // 根据 id 或 code 查找页面
+            if (id) {
+              foundPage = pages.find((p: any) => p.id === id);
+            } else if (code) {
+              foundPage = pages.find((p: any) => p.root?.code === code || p.code === code);
+            }
+            
+            if (foundPage) {
+              console.log('从 localStorage 获取到页面数据:', foundPage);
+              formData = foundPage;
+              dataSource = 'localStorage';
+              
+              // 立即发布数据到事件总线，确保加载状态能及时更新
+              ctx.publish('form.data.resolved', {
+                id: id,
+                code: code,
+                type,
+                data: formData,
+                timestamp: Date.now(),
+                source: dataSource
+              });
+              
+              return formData;
+            } else {
+              console.log('在 localStorage 中未找到页面数据，将使用 API 获取');
+            }
+          } else {
+            console.log('localStorage 中没有页面数据，将使用 API 获取');
+          }
+        } catch (error) {
+          console.warn('从 localStorage 读取页面数据失败:', error);
+        }
       }
       
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      // 如果 localStorage 中没有找到数据，则调用 API
+      if (!formData) {
+        let response;
+        
+        if (sendFormData) {
+          // POST 请求：发送当前表单数据
+          const currentFormData = ctx.getAllFormValues();
+          console.log('发送表单数据到后端:', currentFormData);
+          
+          response = await fetch('/api/resolve-form', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              id,
+              code,
+              type,
+              formData: currentFormData
+            })
+          });
+        } else {
+          // GET 请求：获取模板数据
+          const queryParams = new URLSearchParams();
+          if (id) queryParams.append('id', id);
+          if (code) queryParams.append('code', code);
+          queryParams.append('type', type);
+          if (getFormData) queryParams.append('getFormData', 'true');
+          
+          console.log('从 API 获取数据:', `/api/resolve-form?${queryParams.toString()}`);
+          response = await fetch(`/api/resolve-form?${queryParams.toString()}`);
+        }
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        formData = await response.json();
+        dataSource = 'api';
+        console.log('从 API 获取到数据:', formData);
       }
-      
-      formData = await response.json();
       
       // 发布数据到事件总线
       ctx.publish('form.data.resolved', {
-        id: id || code,
+        id: id,
+        code: code,
         type,
         data: formData,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        source: dataSource
       });
       
       return formData;
     } catch (error) {
       console.error('resolvefetch 错误:', error);
       ctx.publish('form.data.error', {
-        id: id || code,
+        id: id,
+        code: code,
         type,
         error: error.message,
         timestamp: Date.now()
@@ -406,7 +459,6 @@ export async function execHandler(name: string, params: any) {
     try {
       // 创建一个异步函数来执行脚本，支持await语法
       const scriptFunction = new Function('ctx', 'params', 'event', 'execHandler', `
-        const payload = params;
         return (async () => {
           ${params.script}
         })();

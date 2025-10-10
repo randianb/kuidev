@@ -31,17 +31,37 @@ export default function RunPage() {
       setLoading(true);
       setError(null);
       
+      // 设置一个较短的超时作为安全网，防止加载状态卡住
+      const timeoutId = setTimeout(() => {
+        console.warn('页面数据获取超时，强制关闭加载状态');
+        setLoading(false);
+      }, 2000); // 2秒超时
+      
       try {
         execHandler('resolvefetch', {
           id: page.id,
           code: page.root?.code,
           type: 'page'
+        }).then(() => {
+          // 清除超时
+          clearTimeout(timeoutId);
+        }).catch((err: any) => {
+          console.error('页面数据获取失败:', err);
+          setError(err.message || '数据获取失败');
+          setLoading(false);
+          clearTimeout(timeoutId);
         });
       } catch (err: any) {
         console.error('页面数据获取失败:', err);
         setError(err.message || '数据获取失败');
         setLoading(false);
+        clearTimeout(timeoutId);
       }
+      
+      // 清理函数
+      return () => {
+        clearTimeout(timeoutId);
+      };
     }
   }, [page?.id, page?.root?.code]);
 
@@ -53,7 +73,6 @@ export default function RunPage() {
         setFormData(payload.data);
         setError(null);
         setLoading(false);
-        console.log('页面数据获取成功:', payload.data);
       }
     };
 
@@ -82,16 +101,30 @@ export default function RunPage() {
         setError(null);
         setFormData(null);
         
+        // 设置超时作为安全网
+        const timeoutId = setTimeout(() => {
+          console.warn('页面数据刷新超时，强制关闭加载状态');
+          setLoading(false);
+        }, 2000);
+        
         try {
           execHandler('resolvefetch', {
             id: page.id,
             code: page.root?.code,
             type: 'page'
+          }).then(() => {
+            clearTimeout(timeoutId);
+          }).catch((err: any) => {
+            console.error('页面数据刷新失败:', err);
+            setError(err.message || '数据刷新失败');
+            setLoading(false);
+            clearTimeout(timeoutId);
           });
         } catch (err: any) {
           console.error('页面数据刷新失败:', err);
           setError(err.message || '数据刷新失败');
           setLoading(false);
+          clearTimeout(timeoutId);
         }
       }
     };
@@ -105,8 +138,29 @@ export default function RunPage() {
   const roots = getPageRoots(page);
 
   return (
-    <div className="h-full p-6 flex flex-col">
+    <div className="h-full p-6 flex flex-col relative">
       <div className="mb-3 text-sm text-muted-foreground">运行态 · {page.name}</div>
+      
+      {/* 屏蔽加载状态显示 */}
+      {/* {loading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-75 z-50">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <div className="text-lg font-medium mb-2">加载中...</div>
+            <div className="text-sm text-gray-500">正在获取页面数据</div>
+          </div>
+        </div>
+      )} */}
+
+      {error && (
+        <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-75 z-50">
+          <div className="text-center text-red-600">
+            <div className="text-lg font-medium mb-2">加载失败</div>
+            <div className="text-sm text-gray-500">{error}</div>
+          </div>
+        </div>
+      )}
+      
       <div className="flex-1 min-h-0 overflow-auto">
         {roots.map((root) => (
           <NodeRenderer key={root.id} node={root} ctx={{}} />
