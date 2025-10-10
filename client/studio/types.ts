@@ -96,6 +96,11 @@ export interface NodeMeta {
 
 export type TemplateKind = "blank" | "content" | "vscode" | "landing" | "email" | "home" | "admin" | "grid" | "dashboard";
 
+// 页面事件类型定义
+export interface PageEvents {
+  onPageLoad?: string; // 页面加载时执行的脚本代码
+}
+
 export interface PageMeta {
   id: string;
   name: string;
@@ -104,6 +109,7 @@ export interface PageMeta {
   root: NodeMeta; // root container (向后兼容)
   roots?: NodeMeta[]; // 多个根节点支持
   groupId?: string; // 所属分组ID
+  events?: PageEvents; // 页面事件配置
   createdAt: number;
   updatedAt: number;
 }
@@ -328,5 +334,15 @@ export function createPage(name: string, template: TemplateKind): PageMeta {
   }
 
   const now = Date.now();
-  return { id: generateUUID(), name, template, root, createdAt: now, updatedAt: now };
+  return { 
+    id: generateUUID(), 
+    name, 
+    template, 
+    root, 
+    events: {
+      onPageLoad: "// 页面加载时执行的代码\nconsole.log('页面已加载:', '" + name + "');"
+    },
+    createdAt: now, 
+    updatedAt: now 
+  };
 }

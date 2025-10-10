@@ -79,6 +79,9 @@
       name, 
       template, 
       root, 
+      events: {
+        onPageLoad: "// 页面加载时执行的代码\nconsole.log('页面已加载:', '" + name + "');"
+      },
       createdAt: now, 
       updatedAt: now 
     };
