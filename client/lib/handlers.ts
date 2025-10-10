@@ -368,8 +368,6 @@ const handlers: Record<string, NamedHandler> = {
   navigateForward: (params, ctx) => {
     const historyItem = navigationHistory.goForward();
     if (historyItem) {
-      console.log('导航前进到:', historyItem);
-      
       // 发布导航事件
       ctx.publish('page.navigate', {
         pageId: historyItem.pageId,
@@ -399,6 +397,7 @@ const handlers: Record<string, NamedHandler> = {
 
   // 页面刷新功能
   refreshPage: (params, ctx) => {
+    console.log('[handlers] refreshPage 被调用:', params);
     // 发布页面刷新事件，清除缓存并重新加载数据
     ctx.publish('page.refresh', {
       pageId: params?.pageId,
@@ -420,6 +419,7 @@ const handlers: Record<string, NamedHandler> = {
 
   // 刷新当前页面
   refreshCurrentPage: (params, ctx) => {
+    console.log('[handlers] refreshCurrentPage 被调用:', params);
     // 刷新当前页面，清除所有缓存
     ctx.publish('page.refresh', {
       clearCache: true,

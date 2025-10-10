@@ -80,70 +80,66 @@ export default function RuntimePreview({ pageData, pageId }: RuntimePreviewProps
 
   useEffect(() => {
     const unsubDialog = bus.subscribe("dialog.open", (payload: any) => {
+      console.log('[CleanPreview] dialog.open 事件:', payload);
       setDlg(payload || {});
       setOpen(true);
     });
 
     // 监听页面导航事件
     const unsubNavigate = bus.subscribe("page.navigate", (payload: any) => {
-      console.log("🔄 CleanPreview 收到 page.navigate 事件:", {
-        payload,
-        currentPageId: page?.id,
-        timestamp: new Date().toISOString(),
-        stackTrace: new Error().stack
-      });
-      
+      console.log('[CleanPreview] page.navigate 事件:', payload, '当前页面ID:', page?.id);
+      // 只有当导航的目标页面与当前预览页面相同时，才重新加载页面
+      // 这样可以避免在编辑其他页面时意外清空当前预览页面
+      if (payload?.pageId && page?.id && payload.pageId === page.id) {
+        console.log('[CleanPreview] 页面ID匹配，清空页面状态');
+        setInitialLoading(true);
+        setPage(null);
+        setError(null);
+      } else {
+        console.log('[CleanPreview] 页面ID不匹配或缺失，忽略导航事件');
+      }
+      // 如果没有 pageId 或者 pageId 不匹配，则忽略该事件
+    });
+
+    // 监听页面刷新事件
+    const unsubRefresh = bus.subscribe("page.refresh", (payload: any) => {
+      console.log('[CleanPreview] page.refresh 事件:', payload, '当前页面ID:', page?.id);
+      // 如果指定了 pageId，只刷新对应的页面
       if (payload?.pageId) {
-        console.log("📄 开始页面导航处理:", {
-          targetPageId: payload.pageId,
-          fromHistory: payload.fromHistory,
-          currentPage: page?.id
-        });
-        
-        console.log("⚠️ 暂时禁用页面清空，仅记录事件信息");
-        // setInitialLoading(true);
-        // setPage(null);
-        // setError(null);
-        
-        // 尝试从localStorage获取新页面数据
-        try {
-          const storedPages = localStorage.getItem('studio.pages');
-          if (storedPages) {
-            const pages = JSON.parse(storedPages);
-            const foundPage = pages.find((p: PageMeta) => p.id === payload.pageId);
-            if (foundPage) {
-              console.log("✅ 找到目标页面，加载成功:", foundPage.id);
-              setPage(foundPage);
-              setInitialLoading(false);
-            } else {
-              console.log("❌ 未找到目标页面:", payload.pageId);
-              // 如果没找到页面，直接关闭加载状态
-              setInitialLoading(false);
-            }
-          } else {
-            console.log("❌ localStorage 中没有页面数据");
-            // 如果没有存储的页面数据，直接关闭加载状态
-            setInitialLoading(false);
-          }
-        } catch (err) {
-          console.error('导航时获取页面数据失败:', err);
-          setInitialLoading(false);
+        if (page?.id && payload.pageId === page.id) {
+          console.log('[CleanPreview] 刷新指定页面，清空页面状态');
+          setInitialLoading(true);
+          setPage(null);
+          setError(null);
+        } else {
+          console.log('[CleanPreview] 刷新的页面ID不匹配，忽略刷新事件');
         }
       } else {
-        console.log("⚠️ page.navigate 事件缺少 pageId:", payload);
+        // 如果没有指定 pageId，刷新当前页面
+        if (page?.id) {
+          console.log('[CleanPreview] 刷新当前页面，清空页面状态');
+          setInitialLoading(true);
+          setPage(null);
+          setError(null);
+        } else {
+          console.log('[CleanPreview] 没有当前页面，忽略刷新事件');
+        }
       }
     });
 
     return () => {
       unsubDialog();
       unsubNavigate();
+      unsubRefresh();
     };
-  }, []);
+  }, [page?.id]);
 
   // 处理弹框关闭
   const handleDialogClose = (isOpen: boolean) => {
+    console.log('[CleanPreview] 对话框状态变化:', isOpen);
     setOpen(isOpen);
     if (!isOpen) {
+      console.log('[CleanPreview] 对话框关闭，清空对话框数据');
       setDlg(null);
     }
   };

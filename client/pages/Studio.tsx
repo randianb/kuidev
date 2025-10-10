@@ -7272,7 +7272,7 @@ setText("操作按钮点击事件触发！行ID: " + (payload.row?.id || "未知
       timestamp: new Date().toISOString()
     });
     
-    commit(updatedPage);
+   // commit(updatedPage);
     
     console.log("✅ commit 调用完成，页面状态已更新");
     
@@ -8863,10 +8863,12 @@ setText("操作按钮点击事件触发！行ID: " + (payload.row?.id || "未知
                 )}
               </div>
               
-              <Button variant="secondary" onClick={() => navigator.clipboard.writeText(JSON.stringify(page))}>
-                复制页面元数据
-              </Button>
-              <Button 
+              {/* <Button variant="outline" onClick={addDefaultSpacingToCurrentPage}>
+                添加默认间距
+              </Button> */}
+
+
+                            <Button 
                 variant="outline" 
                 onClick={() => {
                   console.log("📊 准备显示元数据编辑器");
@@ -8880,9 +8882,6 @@ setText("操作按钮点击事件触发！行ID: " + (payload.row?.id || "未知
               >
                 <Code className="h-4 w-4 mr-2" />
                 显示元数据
-              </Button>
-              <Button variant="outline" onClick={addDefaultSpacingToCurrentPage}>
-                添加默认间距
               </Button>
             </div>
           </div>
