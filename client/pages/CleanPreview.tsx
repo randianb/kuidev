@@ -86,10 +86,24 @@ export default function RuntimePreview({ pageData, pageId }: RuntimePreviewProps
 
     // 监听页面导航事件
     const unsubNavigate = bus.subscribe("page.navigate", (payload: any) => {
+      console.log("🔄 CleanPreview 收到 page.navigate 事件:", {
+        payload,
+        currentPageId: page?.id,
+        timestamp: new Date().toISOString(),
+        stackTrace: new Error().stack
+      });
+      
       if (payload?.pageId) {
-        setInitialLoading(true);
-        setPage(null);
-        setError(null);
+        console.log("📄 开始页面导航处理:", {
+          targetPageId: payload.pageId,
+          fromHistory: payload.fromHistory,
+          currentPage: page?.id
+        });
+        
+        console.log("⚠️ 暂时禁用页面清空，仅记录事件信息");
+        // setInitialLoading(true);
+        // setPage(null);
+        // setError(null);
         
         // 尝试从localStorage获取新页面数据
         try {
@@ -98,13 +112,16 @@ export default function RuntimePreview({ pageData, pageId }: RuntimePreviewProps
             const pages = JSON.parse(storedPages);
             const foundPage = pages.find((p: PageMeta) => p.id === payload.pageId);
             if (foundPage) {
+              console.log("✅ 找到目标页面，加载成功:", foundPage.id);
               setPage(foundPage);
               setInitialLoading(false);
             } else {
+              console.log("❌ 未找到目标页面:", payload.pageId);
               // 如果没找到页面，直接关闭加载状态
               setInitialLoading(false);
             }
           } else {
+            console.log("❌ localStorage 中没有页面数据");
             // 如果没有存储的页面数据，直接关闭加载状态
             setInitialLoading(false);
           }
@@ -112,6 +129,8 @@ export default function RuntimePreview({ pageData, pageId }: RuntimePreviewProps
           console.error('导航时获取页面数据失败:', err);
           setInitialLoading(false);
         }
+      } else {
+        console.log("⚠️ page.navigate 事件缺少 pageId:", payload);
       }
     });
 

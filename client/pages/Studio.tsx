@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { createNode, createPage, NodeMeta, PageMeta, PageGroup, TemplateKind, CustomComponent, getPageRoots, setPageRoots, addPageRoot, removePageRoot } from "@/studio/types";
 import { getPage, loadPages, upsertPage, upsertCustomComponent, loadCustomComponents, deleteCustomComponent as deleteCustomComponentFromStorage, loadPageGroups, savePageGroups, upsertPageGroup, deletePageGroup, getPageGroup } from "@/studio/storage";
 import { getCachedPage, getCachedPages, upsertCachedPage, deleteCachedPage, initializePageCache, smartPreloadPages } from "@/studio/page-cache";
@@ -24,6 +24,60 @@ import Editor from "@monaco-editor/react";
 import { generateUUID } from "@/lib/utils";
 import { getSpacingClasses } from "@/studio/utils/spacing";
 import { migratePageSpacing } from "@/studio/utils/migration";
+
+// JavaScript 代码格式化函数
+function formatJavaScript(code: string): string {
+  try {
+    console.log('🔧 开始格式化代码:', code);
+    console.log('🔧 代码长度:', code.length);
+    
+    // 直接处理转义字符，不使用复杂的 JSON 解析
+    let unescapedCode = code
+      .replace(/\\n/g, '\n')
+      .replace(/\\t/g, '\t')
+      .replace(/\\"/g, '"')
+      .replace(/\\'/g, "'")
+      .replace(/\\\\/g, '\\');
+    
+    console.log('🔧 处理转义字符后:', unescapedCode);
+    console.log('🔧 处理后长度:', unescapedCode.length);
+    
+    // 简单的 JavaScript 格式化
+    let indentLevel = 0;
+    const lines = unescapedCode.split('\n');
+    const formattedLines: string[] = [];
+    
+    for (let line of lines) {
+      const trimmedLine = line.trim();
+      if (!trimmedLine) {
+        formattedLines.push('');
+        continue;
+      }
+      
+      // 减少缩进（对于结束括号）
+      if (trimmedLine.startsWith('}') || trimmedLine.startsWith(']') || trimmedLine.startsWith(')')) {
+        indentLevel = Math.max(0, indentLevel - 1);
+      }
+      
+      // 添加缩进
+      const indent = '  '.repeat(indentLevel);
+      formattedLines.push(indent + trimmedLine);
+      
+      // 增加缩进（对于开始括号）
+      if (trimmedLine.endsWith('{') || trimmedLine.endsWith('[') || trimmedLine.endsWith('(')) {
+        indentLevel++;
+      }
+    }
+    
+    const result = formattedLines.join('\n');
+    console.log('🎯 格式化完成:', result);
+    console.log('🎯 最终长度:', result.length);
+    return result;
+  } catch (error) {
+    console.warn('格式化 JavaScript 代码时出错:', error);
+    return code; // 如果格式化失败，返回原始代码
+  }
+}
 
 // 容器类型定义 - 可以包含子组件的组件类型
 const containerTypes = ["Container", "Card", "CollapsibleCard", "ActionCard", "InfoCard", "StatsCard", "NavigationControls", "NestedPageContainer"];
@@ -292,12 +346,15 @@ function SplitPreview({
   );
 }
 
-function CodeEditorDialog({ open, onOpenChange, value, onChange, title = "代码编辑器" }: {
+function CodeEditorDialog({ open, onOpenChange, value, onChange, title = "代码编辑器", language = "javascript", readOnly = false, onMount }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   value: string;
   onChange: (value: string) => void;
-  title?: string;
+  title?: string | React.ReactNode;
+  language?: string;
+  readOnly?: boolean;
+  onMount?: (editor: any) => void;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -308,10 +365,11 @@ function CodeEditorDialog({ open, onOpenChange, value, onChange, title = "代码
         <div className="h-[60vh] border rounded">
           <Editor
             height="100%"
-            defaultLanguage="javascript"
+            defaultLanguage={language}
             value={value}
             onChange={(val) => onChange(val || "")}
             theme="vs-dark"
+            onMount={onMount}
             options={{
               minimap: { enabled: false },
               fontSize: 14,
@@ -319,6 +377,7 @@ function CodeEditorDialog({ open, onOpenChange, value, onChange, title = "代码
               roundedSelection: false,
               scrollBeyondLastLine: false,
               automaticLayout: true,
+              readOnly: readOnly,
             }}
           />
         </div>
@@ -6861,7 +6920,19 @@ export default function Studio() {
   const pageId = params.get("id");
   const [page, setPage] = useState<PageMeta>(() => {
     if (pageId) {
-      return (getCachedPage(pageId!) as PageMeta) ?? createPage("新页面", "content");
+      const cachedPage = getCachedPage(pageId!) as PageMeta;
+      console.log("🔍 页面初始化 - pageId:", pageId);
+      console.log("📄 缓存页面数据:", {
+        found: !!cachedPage,
+        id: cachedPage?.id,
+        name: cachedPage?.name,
+        hasRoot: !!cachedPage?.root,
+        hasRoots: !!cachedPage?.roots,
+        rootId: cachedPage?.root?.id,
+        rootType: cachedPage?.root?.type,
+        rootChildren: cachedPage?.root?.children?.length
+      });
+      return cachedPage ?? createPage("新页面", "content");
     } else {
       // 创建包含Header组件的测试页面
       const testPage = createPage("Header测试页面", "content");
@@ -6916,11 +6987,217 @@ setText("操作按钮点击事件触发！行ID: " + (payload.row?.id || "未知
   const [groupName, setGroupName] = useState("");
   const [groupDescription, setGroupDescription] = useState("");
   const [groupColor, setGroupColor] = useState("#6b7280");
+  const [metadataEditorOpen, setMetadataEditorOpen] = useState(false);
+  const metadataEditorOpenRef = useRef(false);
+  const isSavingScriptRef = useRef(false);
+  const previousPageRef = useRef<PageMeta | null>(null);
+  const [metadataCode, setMetadataCode] = useState(() => {
+    console.log("🔧 初始化 metadataCode 状态");
+    return "";
+  });
+  const [scriptEditorOpen, setScriptEditorOpen] = useState(false);
+  const [editingScript, setEditingScript] = useState("");
+  const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
+  const [doubleClickEditEnabled, setDoubleClickEditEnabled] = useState(true);
+
+  // 检查页面是否有实质性变化（排除仅代码更新）
+  const hasStructuralChanges = (current: PageMeta, previous: PageMeta | null): boolean => {
+    if (!previous) return true; // 首次加载算作变化
+    
+    // 检查基本属性
+    if (current.id !== previous.id || current.name !== previous.name) {
+      return true;
+    }
+    
+    // 检查根节点数量
+    const currentRootsLength = current.roots?.length || 0;
+    const previousRootsLength = previous.roots?.length || 0;
+    if (currentRootsLength !== previousRootsLength) {
+      return true;
+    }
+    
+    // 递归检查节点结构（排除code属性）
+    const compareNodeStructure = (node1: NodeMeta, node2: NodeMeta): boolean => {
+      if (node1.id !== node2.id || node1.type !== node2.type) {
+        return false; // 结构不同
+      }
+      
+      // 检查子节点数量
+      const children1Length = node1.children?.length || 0;
+      const children2Length = node2.children?.length || 0;
+      if (children1Length !== children2Length) {
+        return false; // 子节点数量不同
+      }
+      
+      // 递归检查子节点
+      if (node1.children && node2.children) {
+        for (let i = 0; i < node1.children.length; i++) {
+          if (!compareNodeStructure(node1.children[i], node2.children[i])) {
+            return false;
+          }
+        }
+      }
+      
+      return true; // 结构相同
+    };
+    
+    // 比较根节点结构
+    if (current.roots && previous.roots) {
+      for (let i = 0; i < current.roots.length; i++) {
+        if (!compareNodeStructure(current.roots[i], previous.roots[i])) {
+          return true; // 发现结构变化
+        }
+      }
+    }
+    
+    return false; // 没有结构变化
+  };
 
   const commit = (next: PageMeta) => {
+    console.log("💾 提交页面更改:", {
+      pageId: next.id,
+      pageName: next.name,
+      hasRoot: !!next.root,
+      hasRoots: !!(next.roots && next.roots.length > 0),
+      rootsLength: next.roots?.length,
+      rootId: next.root?.id,
+      rootType: next.root?.type,
+      timestamp: new Date().toISOString(),
+      currentPageId: page.id
+    });
+    
+    // 验证页面数据完整性
+    if (!next.root && (!next.roots || next.roots.length === 0)) {
+      console.error("❌ 警告：提交的页面数据缺少根节点！");
+      console.log("🔍 完整的next对象:", JSON.stringify(next, null, 2));
+    }
+    
     setHistory((h) => [...h, page]);
     setFuture([]);
+    
+    console.log("🔄 准备调用 setPage(next):", {
+      nextPageId: next.id,
+      currentPageId: page.id,
+      timestamp: new Date().toISOString()
+    });
+    
     setPage(next);
+    
+    console.log("✅ setPage(next) 调用完成");
+  };
+
+  // 查看页面元数据
+  const generatePageMetadata = () => {
+    console.log("🔍 开始生成页面元数据");
+    console.log("📄 当前页面状态:", {
+      id: page.id,
+      name: page.name,
+      hasRoot: !!page.root,
+      hasRoots: !!page.roots,
+      rootsLength: page.roots?.length,
+      rootId: page.root?.id,
+      rootType: page.root?.type,
+      rootChildren: page.root?.children?.length
+    });
+
+    // 检查页面数据的完整性
+    if (!page.root && (!page.roots || page.roots.length === 0)) {
+      console.error("❌ 页面数据不完整：没有根节点数据");
+      console.log("🔍 完整页面对象:", JSON.stringify(page, null, 2));
+      return JSON.stringify({
+        error: "页面数据不完整：没有根节点数据",
+        page: {
+          id: page.id,
+          name: page.name,
+          hasRoot: !!page.root,
+          hasRoots: !!page.roots
+        },
+        nodes: []
+      }, null, 2);
+    }
+
+    // 获取所有节点的递归函数
+    const getAllNodes = (node: NodeMeta): NodeMeta[] => {
+      const nodes = [node];
+      if (node.children) {
+        for (const child of node.children) {
+          nodes.push(...getAllNodes(child));
+        }
+      }
+      return nodes;
+    };
+
+    // 获取页面的所有根节点
+    const roots = page.roots || [page.root];
+    console.log("🌳 根节点信息:", {
+      rootsCount: roots.length,
+      roots: roots.map(root => ({
+        id: root?.id,
+        type: root?.type,
+        childrenCount: root?.children?.length
+      }))
+    });
+    
+    const allNodes = roots.flatMap(root => root ? getAllNodes(root) : []);
+    console.log("📊 所有节点统计:", {
+      totalNodes: allNodes.length,
+      nodeTypes: allNodes.map(n => n.type)
+    });
+
+    const metadata = {
+      page: {
+        id: page.id,
+        name: page.name,
+        template: page.template,
+        description: page.description,
+        groupId: page.groupId,
+        createdAt: page.createdAt,
+        updatedAt: page.updatedAt,
+        rootNodeCount: roots.length
+      },
+      nodes: allNodes.map(node => ({
+        id: node.id,
+        type: node.type,
+        code: node.code,
+        props: node.props,
+        layout: node.layout,
+        flexEnabled: node.flexEnabled,
+        alignItems: node.alignItems,
+        locked: node.locked,
+        resizable: node.resizable,
+        resizableEnabled: node.resizableEnabled,
+        panelSizes: node.panelSizes,
+        gridCols: node.gridCols,
+        gridRows: node.gridRows,
+        gridGap: node.gridGap,
+        style: node.style,
+        margin: node.margin,
+        padding: node.padding,
+        childCount: node.children ? node.children.length : 0,
+        hasChildren: !!(node.children && node.children.length > 0),
+        hasProps: !!(node.props && Object.keys(node.props).length > 0),
+        hasStyle: !!(node.style && Object.keys(node.style).length > 0),
+        hasMargin: !!node.margin,
+        hasPadding: !!node.padding
+      })),
+      statistics: {
+        totalNodes: allNodes.length,
+        totalRootNodes: roots.length,
+        nodesByType: allNodes.reduce((acc, node) => {
+          acc[node.type] = (acc[node.type] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>),
+        nodesWithChildren: allNodes.filter(node => node.children && node.children.length > 0).length,
+        nodesWithProps: allNodes.filter(node => node.props && Object.keys(node.props).length > 0).length,
+        nodesWithStyle: allNodes.filter(node => node.style && Object.keys(node.style).length > 0).length,
+        nodesWithLayout: allNodes.filter(node => !!node.layout).length,
+        flexEnabledNodes: allNodes.filter(node => node.flexEnabled).length,
+        lockedNodes: allNodes.filter(node => node.locked).length,
+        resizableNodes: allNodes.filter(node => node.resizable).length
+      }
+    };
+    
+    return JSON.stringify(metadata, null, 2);
   };
 
   // 切换到指定页面
@@ -6940,12 +7217,184 @@ setText("操作按钮点击事件触发！行ID: " + (payload.row?.id || "未知
     setParams({ id: targetPage.id }, { replace: true });
   };
 
+  // 保存脚本代码
+  const saveScript = () => {
+    console.log("💾 开始保存脚本", { editingNodeId, scriptLength: editingScript?.length });
+    
+    if (!editingNodeId) {
+      console.log("❌ 保存失败：缺少节点ID");
+      return;
+    }
+    
+    // 设置保存标志，防止触发元数据更新
+    isSavingScriptRef.current = true;
+    console.log("🚫 设置脚本保存标志，暂时禁用元数据自动更新");
+    
+    console.log("✅ 验证通过，开始更新节点");
+    
+    const updateNodeScript = (nodes: NodeMeta[]): NodeMeta[] => {
+      return nodes.map(node => {
+        if (node.id === editingNodeId) {
+          console.log("🎯 找到目标节点，更新代码", { nodeId: node.id, oldCode: node.code, newCode: editingScript });
+          return { ...node, code: editingScript };
+        }
+        if (node.children) {
+          return { ...node, children: updateNodeScript(node.children) };
+        }
+        return node;
+      });
+    };
+
+    // 同时更新 roots 和 root 字段，确保数据完整性
+    const updatedRoots = updateNodeScript(page.roots || []);
+    const updatedRoot = page.root ? updateNodeScript([page.root])[0] : undefined;
+    
+    const updatedPage = {
+      ...page,
+      roots: updatedRoots,
+      root: updatedRoot,
+      updatedAt: Date.now()
+    };
+    
+    console.log("📄 页面更新详情:", {
+      hasOriginalRoot: !!page.root,
+      hasOriginalRoots: !!(page.roots && page.roots.length > 0),
+      hasUpdatedRoot: !!updatedRoot,
+      hasUpdatedRoots: !!(updatedRoots && updatedRoots.length > 0),
+      updatedRootsLength: updatedRoots?.length,
+      updatedRootId: updatedRoot?.id
+    });
+    
+    console.log("📄 页面已更新，准备提交更改");
+    console.log("🔄 调用 commit 前的页面状态:", {
+      currentPageId: page.id,
+      updatedPageId: updatedPage.id,
+      timestamp: new Date().toISOString()
+    });
+    
+    commit(updatedPage);
+    
+    console.log("✅ commit 调用完成，页面状态已更新");
+    
+    // 延迟清除保存标志，确保页面更新完成后再允许元数据更新
+    setTimeout(() => {
+      isSavingScriptRef.current = false;
+      console.log("✅ 清除脚本保存标志，恢复元数据自动更新");
+    }, 100);
+    
+    console.log("🎉 脚本保存成功，关闭编辑器");
+    setScriptEditorOpen(false);
+    setEditingScript("");
+    setEditingNodeId(null);
+  };
+
   useEffect(() => {
     setParams({ id: page.id }, { replace: true });
   }, [page.id]);
   useEffect(() => {
     upsertCachedPage(page);
   }, [page]);
+
+  // 同步ref状态
+  useEffect(() => {
+    metadataEditorOpenRef.current = metadataEditorOpen;
+  }, [metadataEditorOpen]);
+
+  // 监听页面变化，如果元数据编辑器是打开的，自动更新元数据内容
+  useEffect(() => {
+    console.log("🔄 页面变化:", {
+      pageId: page.id,
+      editorOpen: metadataEditorOpenRef.current,
+      isSavingScript: isSavingScriptRef.current,
+      hasRoot: !!page.root,
+      hasRoots: !!page.roots,
+      rootsLength: page.roots?.length
+    });
+    
+    // 如果正在保存脚本，跳过元数据更新
+    if (isSavingScriptRef.current) {
+      console.log("🚫 正在保存脚本，跳过元数据更新");
+      previousPageRef.current = page; // 更新引用但不触发元数据更新
+      return;
+    }
+    
+    // 检查是否有结构性变化
+    const hasChanges = hasStructuralChanges(page, previousPageRef.current);
+    console.log("🔍 页面结构变化检测:", {
+      hasStructuralChanges: hasChanges,
+      previousPageId: previousPageRef.current?.id,
+      currentPageId: page.id
+    });
+    
+    // 更新页面引用
+    previousPageRef.current = page;
+    
+    // 只有当元数据编辑器打开且有结构变化时才更新元数据
+    if (metadataEditorOpenRef.current && hasChanges) {
+      console.log("🔄 检测到页面结构变化，元数据编辑器已打开，准备自动更新元数据");
+      
+      // 添加短暂延迟，确保页面状态完全更新
+      const timeoutId = setTimeout(() => {
+        // 使用ref检查编辑器是否仍然打开，防止在延迟期间被关闭
+        // 同时检查是否仍在保存脚本
+        if (metadataEditorOpenRef.current && !isSavingScriptRef.current) {
+          console.log("⏰ 延迟执行元数据更新");
+          const metadata = generatePageMetadata();
+          console.log("📋 重新生成元数据，长度:", metadata.length);
+          
+          // 只有当生成的元数据不为空时才更新
+          if (metadata && metadata.trim() !== "" && !metadata.includes('"nodes": []')) {
+            setMetadataCode(metadata);
+            console.log("✅ 元数据更新成功");
+          } else {
+            console.log("⚠️ 生成的元数据为空，跳过更新");
+          }
+        } else {
+          console.log("⏰ 延迟期间编辑器已关闭或正在保存脚本，取消元数据更新");
+        }
+      }, 100); // 100ms延迟
+      
+      return () => {
+        console.log("🧹 清理元数据更新定时器");
+        clearTimeout(timeoutId);
+      };
+    } else if (metadataEditorOpenRef.current && !hasChanges) {
+      console.log("📋 元数据编辑器已打开，但无结构变化，跳过自动更新");
+    } else {
+      console.log("📋 元数据编辑器已关闭，跳过自动更新");
+    }
+  }, [page]); // 只依赖page，不依赖metadataEditorOpen
+
+  // 监控 metadataCode 状态变化
+  useEffect(() => {
+    console.log("📝 metadataCode 状态变化:", {
+      length: metadataCode.length,
+      isEmpty: metadataCode === "",
+      editorOpen: metadataEditorOpen
+    });
+  }, [metadataCode, metadataEditorOpen]);
+
+  // 监控页面状态变化
+  useEffect(() => {
+    console.log("📄 页面状态变化:", {
+      id: page.id,
+      name: page.name,
+      hasRoot: !!page.root,
+      hasRoots: !!page.roots,
+      rootId: page.root?.id,
+      rootType: page.root?.type,
+      rootChildren: page.root?.children?.length,
+      rootsLength: page.roots?.length
+    });
+  }, [page]);
+
+  // 监控组件挂载和卸载
+  useEffect(() => {
+    console.log("🚀 Studio 组件已挂载");
+    return () => {
+      console.log("💀 Studio 组件即将卸载");
+    };
+  }, []);
   
   useEffect(() => {
     // 初始化缓存和加载数据
@@ -8417,6 +8866,21 @@ setText("操作按钮点击事件触发！行ID: " + (payload.row?.id || "未知
               <Button variant="secondary" onClick={() => navigator.clipboard.writeText(JSON.stringify(page))}>
                 复制页面元数据
               </Button>
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  console.log("📊 准备显示元数据编辑器");
+                  const metadata = generatePageMetadata();
+                  console.log("📋 生成的元数据:", metadata.substring(0, 200) + "...");
+                  console.log("🔄 更新元数据内容，长度:", metadata.length);
+                  setMetadataCode(metadata);
+                  setMetadataEditorOpen(true);
+                  console.log("✅ 元数据编辑器已打开");
+                }}
+              >
+                <Code className="h-4 w-4 mr-2" />
+                显示元数据
+              </Button>
               <Button variant="outline" onClick={addDefaultSpacingToCurrentPage}>
                 添加默认间距
               </Button>
@@ -8561,6 +9025,284 @@ setText("操作按钮点击事件触发！行ID: " + (payload.row?.id || "未知
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* 元数据显示对话框 */}
+      <CodeEditorDialog
+        open={metadataEditorOpen}
+        onOpenChange={(open) => {
+          console.log("📊 元数据编辑器状态变化:", { open, metadataLength: metadataCode.length });
+          
+          if (open) {
+            // 只在打开时处理逻辑
+            setMetadataEditorOpen(true);
+            
+            // 打开时，如果元数据为空或无效，立即生成
+            if (!metadataCode || metadataCode.trim() === "" || metadataCode.includes('"nodes": []')) {
+              console.log("🔄 元数据编辑器打开，检测到空元数据，立即生成");
+              setTimeout(() => {
+                // 再次检查编辑器是否仍然打开
+                if (metadataEditorOpenRef.current) {
+                  const metadata = generatePageMetadata();
+                  console.log("📋 生成新元数据，长度:", metadata.length);
+                  if (metadata && metadata.trim() !== "" && !metadata.includes('"nodes": []')) {
+                    setMetadataCode(metadata);
+                    console.log("✅ 元数据生成成功");
+                  } else {
+                    console.log("⚠️ 生成的元数据仍为空");
+                  }
+                } else {
+                  console.log("⏰ 编辑器已关闭，取消元数据生成");
+                }
+              }, 50);
+            } else {
+              console.log("📋 元数据编辑器打开，使用现有元数据");
+            }
+          } else {
+            // 关闭时只更新状态，不执行任何其他操作
+            console.log("📋 元数据编辑器关闭，仅更新状态");
+            setMetadataEditorOpen(false);
+          }
+        }}
+        value={metadataCode}
+        onChange={(value) => {
+          console.log("📝 元数据编辑器内容变化:", value?.length || 0);
+          setMetadataCode(value || "");
+        }}
+        title={
+          <div className="flex items-center justify-between w-full">
+            <span>页面元数据 (可编辑)</span>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  console.log("🔄 应用元数据更改到页面");
+                  try {
+                    const metadata = JSON.parse(metadataCode);
+                    if (metadata && typeof metadata === 'object') {
+                      // 只更新页面的特定元数据字段，保留其他重要属性
+                      const updatedPage = {
+                        ...page,
+                        // 只更新允许的元数据字段
+                        ...(metadata.name && { name: metadata.name }),
+                        ...(metadata.description !== undefined && { description: metadata.description }),
+                        ...(metadata.template && { template: metadata.template }),
+                        ...(metadata.groupId !== undefined && { groupId: metadata.groupId }),
+                        // 更新时间戳
+                        updatedAt: Date.now()
+                      };
+                      console.log("✅ 元数据应用成功:", updatedPage);
+                      commit(updatedPage);
+                      setMetadataEditorOpen(false);
+                    } else {
+                      console.error("❌ 无效的元数据格式");
+                      alert("元数据格式无效，请检查JSON格式");
+                    }
+                  } catch (error) {
+                    console.error("❌ 元数据解析失败:", error);
+                    alert("元数据解析失败，请检查JSON语法");
+                  }
+                }}
+              >
+                应用更改
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                {doubleClickEditEnabled ? "🔓 双击编辑已启用" : "🔒 双击编辑已锁定"}
+              </span>
+              <Switch
+                checked={doubleClickEditEnabled}
+                onCheckedChange={setDoubleClickEditEnabled}
+                aria-label="切换双击编辑功能"
+              />
+            </div>
+          </div>
+        }
+        language="json"
+        readOnly={false}
+        onMount={(editor) => {
+          console.log("🔧 元数据编辑器已挂载，开始监听双击事件");
+          
+          // 获取编辑器的 DOM 容器
+          const editorContainer = editor.getDomNode();
+          console.log("📦 编辑器容器:", editorContainer);
+          
+          if (editorContainer) {
+            // 使用 DOM 事件监听双击
+            editorContainer.addEventListener('dblclick', (e: MouseEvent) => {
+              console.log("✅ 检测到双击事件", e);
+              
+              // 检查双击编辑功能是否启用
+              if (!doubleClickEditEnabled) {
+                console.log("🔒 双击编辑功能已锁定，忽略双击事件");
+                return;
+              }
+              
+              // 获取当前光标位置
+              const position = editor.getPosition();
+              console.log("📍 当前光标位置:", position);
+              
+              if (position) {
+                const model = editor.getModel();
+                if (model) {
+                  const lineContent = model.getLineContent(position.lineNumber);
+                  console.log("📝 当前行内容:", lineContent);
+                  
+                  // 检查是否双击了特定字段的值
+                  const fullText = model.getValue();
+                  console.log("📄 完整文本长度:", fullText.length);
+                  
+                  // 检查是否双击了元数据相关的区域
+                  const currentOffset = model.getOffsetAt(position);
+                  
+                  // 首先检查是否在页面根级别的元数据区域
+                  const metadataPatterns = [
+                    /"metadata":\s*{[^}]*}/g,
+                    /"title":\s*"[^"]*"/g,
+                    /"description":\s*"[^"]*"/g,
+                    /"keywords":\s*\[[^\]]*\]/g,
+                    /"author":\s*"[^"]*"/g
+                  ];
+                  
+                  let isMetadataArea = false;
+                  for (const pattern of metadataPatterns) {
+                    pattern.lastIndex = 0;
+                    let match;
+                    while ((match = pattern.exec(fullText)) !== null) {
+                      const matchStart = match.index;
+                      const matchEnd = match.index + match[0].length;
+                      
+                      if (currentOffset >= matchStart && currentOffset <= matchEnd) {
+                        isMetadataArea = true;
+                        console.log("📊 检测到双击元数据区域:", match[0]);
+                        break;
+                      }
+                    }
+                    if (isMetadataArea) break;
+                  }
+                  
+                  if (isMetadataArea) {
+                    console.log("🚀 准备打开元数据编辑器");
+                    setMetadataEditorOpen(true);
+                    return;
+                  }
+                  
+                  // 如果不是元数据区域，检查是否是代码字段
+                  let codeMatch = null;
+                  const fieldPatterns = [
+                    /"(code|script|event|handler)":\s*"((?:[^"\\]|\\.)*)"/g,
+                    /"(code|script|event|handler)":\s*`((?:[^`\\]|\\.)*)`/g
+                  ];
+                  
+                  for (const pattern of fieldPatterns) {
+                    pattern.lastIndex = 0; // 重置正则表达式
+                    let match;
+                    while ((match = pattern.exec(fullText)) !== null) {
+                      const fieldName = match[1];
+                      const fieldValue = match[2];
+                      console.log(`🔍 找到 ${fieldName} 字段:`, fieldValue);
+                      
+                      // 检查当前光标位置是否在这个字段附近
+                      const matchStart = match.index;
+                      const matchEnd = match.index + match[0].length;
+                      
+                      console.log("📍 位置信息:", {
+                        matchStart,
+                        matchEnd,
+                        currentOffset,
+                        isInRange: currentOffset >= matchStart && currentOffset <= matchEnd
+                      });
+                      
+                      // 如果光标在这个字段范围内，就使用这个匹配
+                      if (currentOffset >= matchStart && currentOffset <= matchEnd) {
+                        codeMatch = [match[0], fieldValue, fieldName];
+                        console.log("✅ 找到目标字段:", fieldName, "值:", fieldValue);
+                        break;
+                      }
+                    }
+                    if (codeMatch) break;
+                  }
+                  
+                  console.log("🔍 最终代码匹配结果:", codeMatch);
+                  
+                  if (codeMatch) {
+                    console.log("✅ 找到代码字段，开始查找节点ID");
+                    
+                    // 查找对应的节点ID
+                    let nodeId = null;
+                    for (let i = position.lineNumber - 1; i >= 0; i--) {
+                      const prevLine = model.getLineContent(i);
+                      console.log(`🔍 检查第${i}行:`, prevLine);
+                      
+                      const idMatch = prevLine.match(/"id":\s*"([^"]*)"/) ||
+                                     prevLine.match(/"id":\s*`([^`]*)`/);
+                      if (idMatch) {
+                        nodeId = idMatch[1];
+                        console.log("🎯 找到节点ID:", nodeId);
+                        break;
+                      }
+                    }
+                    
+                    if (nodeId) {
+                      const rawScript = codeMatch[1] || "";
+                      const formattedScript = formatJavaScript(rawScript);
+                      
+                      console.log("🚀 准备打开脚本编辑器", {
+                        nodeId,
+                        rawScript,
+                        formattedScript
+                      });
+                      
+                      // 打开脚本编辑器，使用格式化后的代码
+                      setEditingNodeId(nodeId);
+                      setEditingScript(formattedScript);
+                      setScriptEditorOpen(true);
+                    } else {
+                      console.log("❌ 未找到对应的节点ID");
+                    }
+                  } else {
+                    console.log("❌ 当前行不包含代码字段");
+                  }
+                } else {
+                  console.log("❌ 无法获取编辑器模型");
+                }
+              } else {
+                console.log("❌ 无法获取点击位置");
+              }
+            });
+          } else {
+            console.log("❌ 无法获取编辑器容器");
+          }
+        }}
+      />
+
+      {/* 脚本编辑器 */}
+      <CodeEditorDialog
+        open={scriptEditorOpen}
+        onOpenChange={(open) => {
+          console.log("📝 脚本编辑器状态变化:", { open, editingNodeId, scriptLength: editingScript.length });
+          
+          if (!open) {
+            // 关闭时自动保存
+            if (editingScript !== "") {
+              console.log("💾 准备保存脚本");
+              saveScript();
+            } else {
+              console.log("🚫 脚本为空，不保存");
+              setScriptEditorOpen(false);
+              setEditingScript("");
+              setEditingNodeId(null);
+            }
+          }
+        }}
+        value={editingScript}
+        onChange={(value) => {
+          console.log("✏️ 脚本内容变化:", value.length, "字符");
+          setEditingScript(value);
+        }}
+        title={`编辑节点脚本 (${editingNodeId})`}
+        language="javascript"
+        readOnly={false}
+      />
     </div>
   );
 }
