@@ -18,8 +18,9 @@ import { eventHandlerManager } from "@/lib/event-handler-manager";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Switch } from "@/components/ui/switch";
-import { ChevronUp, ChevronDown, Edit, X, Copy, Code, FileText, Square, ExternalLink, List, ListTree } from "lucide-react";
+import { ChevronUp, ChevronDown, Edit, X, Copy, Code, FileText, Square, ExternalLink, List, ListTree, Hash } from "lucide-react";
 import { PageTreeView } from "@/components/PageTreeView";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import Editor from "@monaco-editor/react";
 import { generateUUID } from "@/lib/utils";
 import { getSpacingClasses } from "@/studio/utils/spacing";
@@ -8371,72 +8372,128 @@ setText("操作按钮点击事件触发！行ID: " + (payload.row?.id || "未知
                   // 列表视图
                   <>
                     {allPages.map((p) => (
-                      <div
-                        key={p.id}
-                        tabIndex={0}
-                        className={`group flex flex-col gap-1 rounded border p-2 text-xs cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${
-                          p.id === page.id ? 'bg-primary/10 border-primary' : 
-                          selectedPageId === p.id ? 'bg-accent border-accent-foreground' : 'hover:bg-accent'
-                        }`}
-                        onClick={() => {
-                          setSelectedPageId(p.id);
-                          switchToPage(p);
-                        }}
-                        onFocus={() => setSelectedPageId(p.id)}
-                        onMouseEnter={() => preloadPage(p.id)}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="font-medium truncate flex-1">{p.name}</div>
-                          <div className="opacity-0 group-hover:opacity-100 flex gap-1">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-5 w-5 p-0"
-                              onClick={async (e) => {
-                                 e.stopPropagation();
-                                 const newPage = { ...p, id: generateUUID(), name: `${p.name} 副本`, createdAt: Date.now(), updatedAt: Date.now() };
-                                 await upsertCachedPage(newPage);
-                                 refreshPagesList();
-                                 switchToPage(newPage);
-                               }}
-                            >
-                              <Copy className="h-3 w-3" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-5 w-5 p-0 text-destructive hover:text-destructive"
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                if (confirm(`确定要删除页面"${p.name}"吗？`)) {
-                                  await deleteCachedPage(p.id);
-                                  const remainingPages = getCachedPages();
-                                  
-                                  // 如果删除的是当前页面，需要切换到其他页面
-                                  if (p.id === page.id) {
-                                    if (remainingPages.length > 0) {
-                                      switchToPage(remainingPages[0]);
-                                    } else {
-                                      const newPage = createPage("新页面", "content");
-                                      await upsertCachedPage(newPage);
-                                      switchToPage(newPage);
+                      <ContextMenu key={p.id}>
+                        <ContextMenuTrigger asChild>
+                          <div
+                            tabIndex={0}
+                            className={`group flex flex-col gap-1 rounded border p-2 text-xs cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${
+                              p.id === page.id ? 'bg-primary/10 border-primary' : 
+                              selectedPageId === p.id ? 'bg-accent border-accent-foreground' : 'hover:bg-accent'
+                            }`}
+                            onClick={() => {
+                              setSelectedPageId(p.id);
+                              switchToPage(p);
+                            }}
+                            onFocus={() => setSelectedPageId(p.id)}
+                            onMouseEnter={() => preloadPage(p.id)}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="font-medium truncate flex-1">{p.name}</div>
+                              <div className="opacity-0 group-hover:opacity-100 flex gap-1">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-5 w-5 p-0"
+                                  onClick={async (e) => {
+                                     e.stopPropagation();
+                                     const newPage = { ...p, id: generateUUID(), name: `${p.name} 副本`, createdAt: Date.now(), updatedAt: Date.now() };
+                                     await upsertCachedPage(newPage);
+                                     refreshPagesList();
+                                     switchToPage(newPage);
+                                   }}
+                                >
+                                  <Copy className="h-3 w-3" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-5 w-5 p-0 text-destructive hover:text-destructive"
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    if (confirm(`确定要删除页面"${p.name}"吗？`)) {
+                                      await deleteCachedPage(p.id);
+                                      const remainingPages = getCachedPages();
+                                      
+                                      // 如果删除的是当前页面，需要切换到其他页面
+                                      if (p.id === page.id) {
+                                        if (remainingPages.length > 0) {
+                                          switchToPage(remainingPages[0]);
+                                        } else {
+                                          const newPage = createPage("新页面", "content");
+                                          await upsertCachedPage(newPage);
+                                          switchToPage(newPage);
+                                        }
+                                      }
+                                      
+                                      // 刷新页面列表
+                                      refreshPagesList();
                                     }
-                                  }
-                                  
-                                  // 刷新页面列表
-                                  refreshPagesList();
-                                }
-                              }}
-                            >
-                              <X className="h-3 w-3" />
-                            </Button>
+                                  }}
+                                >
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between text-muted-foreground">
+                              <span className="text-xs">{p.template}</span>
+                              <span className="text-xs">{new Date(p.createdAt).toLocaleDateString()}</span>
+                            </div>
                           </div>
-                        </div>
-                        <div className="flex items-center justify-between text-muted-foreground">
-                          <span className="text-xs">{p.template}</span>
-                          <span className="text-xs">{new Date(p.createdAt).toLocaleDateString()}</span>
-                        </div>
-                      </div>
+                        </ContextMenuTrigger>
+                        <ContextMenuContent>
+                          <ContextMenuItem
+                            onClick={async () => {
+                              const newPage = { ...p, id: generateUUID(), name: `${p.name} 副本`, createdAt: Date.now(), updatedAt: Date.now() };
+                              await upsertCachedPage(newPage);
+                              refreshPagesList();
+                              switchToPage(newPage);
+                            }}
+                          >
+                            <Copy className="mr-2 h-4 w-4" />
+                            复制页面
+                          </ContextMenuItem>
+                          <ContextMenuItem
+                            onClick={async () => {
+                              try {
+                                await navigator.clipboard.writeText(p.id);
+                                // 可以添加toast提示
+                              } catch (err) {
+                                console.error('复制页面ID失败:', err);
+                              }
+                            }}
+                          >
+                            <Hash className="mr-2 h-4 w-4" />
+                            复制页面ID
+                          </ContextMenuItem>
+                          <ContextMenuSeparator />
+                          <ContextMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onClick={async () => {
+                              if (confirm(`确定要删除页面"${p.name}"吗？`)) {
+                                await deleteCachedPage(p.id);
+                                const remainingPages = getCachedPages();
+                                
+                                // 如果删除的是当前页面，需要切换到其他页面
+                                if (p.id === page.id) {
+                                  if (remainingPages.length > 0) {
+                                    switchToPage(remainingPages[0]);
+                                  } else {
+                                    const newPage = createPage("新页面", "content");
+                                    await upsertCachedPage(newPage);
+                                    switchToPage(newPage);
+                                  }
+                                }
+                                
+                                // 刷新页面列表
+                                refreshPagesList();
+                              }
+                            }}
+                          >
+                            <X className="mr-2 h-4 w-4" />
+                            删除页面
+                          </ContextMenuItem>
+                        </ContextMenuContent>
+                      </ContextMenu>
                     ))}
                     
                     {loadPages().length === 0 && (

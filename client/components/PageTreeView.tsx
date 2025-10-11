@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronRight, Copy, X, Folder, FolderOpen, FileText, Plus, Edit, Search, Trash2, Minus, Navigation } from 'lucide-react';
+import { ChevronDown, ChevronRight, Copy, X, Folder, FolderOpen, FileText, Plus, Edit, Search, Trash2, Minus, Navigation, Hash } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { PageMeta, PageGroup } from '@/studio/types';
 import { navigateToPage } from '@/lib/navigation';
 
@@ -93,68 +94,100 @@ export function PageTreeView({
     const isCurrent = currentPageId === page.id;
 
     return (
-      <div
-        key={page.id}
-        className={`ml-6 p-3 border rounded-lg cursor-pointer transition-all relative group ${
-          isSelected
-            ? 'border-blue-500 bg-blue-50'
-            : isCurrent
-            ? 'border-green-500 bg-green-50'
-            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-        }`}
-        onClick={() => onPageSelect(page)}
-        onMouseEnter={() => onPagePreload(page.id)}
-      >
-        <div className="flex items-center space-x-2 min-w-0">
-          <FileText className="w-4 h-4 text-gray-500 flex-shrink-0" />
-          <span 
-            className="font-medium text-sm truncate flex-1 min-w-0" 
-            title={page.name}
+      <ContextMenu key={page.id}>
+        <ContextMenuTrigger asChild>
+          <div
+            className={`ml-6 p-3 border rounded-lg cursor-pointer transition-all relative group ${
+              isSelected
+                ? 'border-blue-500 bg-blue-50'
+                : isCurrent
+                ? 'border-green-500 bg-green-50'
+                : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+            }`}
+            onClick={() => onPageSelect(page)}
+            onMouseEnter={() => onPagePreload(page.id)}
           >
-            {page.name}
-          </span>
-          {page.template && (
-            <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded flex-shrink-0 whitespace-nowrap">
-              {page.template}
-            </span>
-          )}
-        </div>
-        
-        {/* 悬停时显示的浮动按钮 */}
-        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center space-x-1 bg-white rounded-md shadow-sm border border-gray-200 p-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={(e) => {
-              e.stopPropagation();
-              onPageCopy(page);
-            }}
-            className="h-6 w-6 p-0 hover:bg-gray-100"
-            title="复制页面"
-          >
-            <Copy className="w-3 h-3" />
-          </Button>
-          
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={(e) => {
-              e.stopPropagation();
-              onPageDelete(page);
-            }}
-            className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
-            title="删除页面"
-          >
-            <X className="w-3 h-3" />
-          </Button>
-        </div>
-        
-        {page.updatedAt && (
-          <div className="text-xs text-gray-400 mt-1">
-            更新于 {new Date(page.updatedAt).toLocaleString()}
+            <div className="flex items-center space-x-2 min-w-0">
+              <FileText className="w-4 h-4 text-gray-500 flex-shrink-0" />
+              <span 
+                className="font-medium text-sm truncate flex-1 min-w-0" 
+                title={page.name}
+              >
+                {page.name}
+              </span>
+              {page.template && (
+                <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded flex-shrink-0 whitespace-nowrap">
+                  {page.template}
+                </span>
+              )}
+            </div>
+            
+            {/* 悬停时显示的浮动按钮 */}
+            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center space-x-1 bg-white rounded-md shadow-sm border border-gray-200 p-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onPageCopy(page);
+                }}
+                className="h-6 w-6 p-0 hover:bg-gray-100"
+                title="复制页面"
+              >
+                <Copy className="w-3 h-3" />
+              </Button>
+              
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onPageDelete(page);
+                }}
+                className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                title="删除页面"
+              >
+                <X className="w-3 h-3" />
+              </Button>
+            </div>
+            
+            {page.updatedAt && (
+              <div className="text-xs text-gray-400 mt-1">
+                更新于 {new Date(page.updatedAt).toLocaleString()}
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </ContextMenuTrigger>
+        <ContextMenuContent>
+          <ContextMenuItem
+            onClick={() => onPageCopy(page)}
+          >
+            <Copy className="mr-2 h-4 w-4" />
+            复制页面
+          </ContextMenuItem>
+          <ContextMenuItem
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(page.id);
+                // 可以添加toast提示
+              } catch (err) {
+                console.error('复制页面ID失败:', err);
+              }
+            }}
+          >
+            <Hash className="mr-2 h-4 w-4" />
+            复制页面ID
+          </ContextMenuItem>
+          <ContextMenuSeparator />
+          <ContextMenuItem
+            className="text-destructive focus:text-destructive"
+            onClick={() => onPageDelete(page)}
+          >
+            <X className="mr-2 h-4 w-4" />
+            删除页面
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
     );
   };
 
