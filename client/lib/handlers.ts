@@ -458,7 +458,9 @@ export async function execHandler(name: string, params: any) {
     
     try {
       // 创建一个异步函数来执行脚本，支持await语法
+      // 注入 payload 变量，兼容脚本中直接使用 `payload`
       const scriptFunction = new Function('ctx', 'params', 'event', 'execHandler', `
+        const payload = params?.payload;
         return (async () => {
           ${params.script}
         })();

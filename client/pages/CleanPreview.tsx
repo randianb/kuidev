@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { NodeRenderer } from "@/studio/registry";
-import { bus } from "@/lib/eventBus";
+import { bus, EVENT_TOPICS } from "@/lib/eventBus";
 import { execHandler } from "@/lib/handlers";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PageMeta, getPageRoots } from "@/studio/types";
@@ -85,20 +85,32 @@ export default function RuntimePreview({ pageData, pageId }: RuntimePreviewProps
       setOpen(true);
     });
 
-    // 监听页面导航事件
-    const unsubNavigate = bus.subscribe("page.navigate", (payload: any) => {
+    // 监听页面导航事件（兼容早到事件和统一事件主题）
+    const handleNavigate = (payload: any) => {
+      const incomingId = payload?.pageId ?? payload?.id ?? null;
       console.log('[CleanPreview] page.navigate 事件:', payload, '当前页面ID:', page?.id);
-      // 只有当导航的目标页面与当前预览页面相同时，才重新加载页面
-      // 这样可以避免在编辑其他页面时意外清空当前预览页面
-      if (payload?.pageId && page?.id && payload.pageId === page.id) {
-        console.log('[CleanPreview] 页面ID匹配，清空页面状态');
-        setInitialLoading(true);
-        setPage(null);
-        setError(null);
+      if (incomingId) {
+        try {
+          const storedPages = localStorage.getItem('studio.pages');
+          if (storedPages) {
+            const pages = JSON.parse(storedPages);
+            const foundPage = pages.find((p: PageMeta) => p.id === incomingId);
+            if (foundPage) {
+              setPage(foundPage);
+            }
+          }
+        } catch (err) {
+          console.error('获取页面数据失败:', err);
+        }
       } else {
-        console.log('[CleanPreview] 页面ID不匹配或缺失，忽略导航事件');
+        console.log('[CleanPreview] 导航事件缺少页面ID，忽略');
       }
-      // 如果没有 pageId 或者 pageId 不匹配，则忽略该事件
+    };
+
+    const unsubNavigate = bus.subscribe("page.navigate", handleNavigate);
+    // 兼容统一导航事件主题
+    const unsubNavigateUnified = bus.subscribe(EVENT_TOPICS.NAVIGATE_TO_PAGE, (event: any) => {
+      handleNavigate({ pageId: event?.pageId });
     });
 
     // 监听页面刷新事件
@@ -130,6 +142,7 @@ export default function RuntimePreview({ pageData, pageId }: RuntimePreviewProps
     return () => {
       unsubDialog();
       unsubNavigate();
+      unsubNavigateUnified();
       unsubRefresh();
     };
   }, [page?.id]);
@@ -150,13 +163,13 @@ export default function RuntimePreview({ pageData, pageId }: RuntimePreviewProps
     if (page && (page.id || page.root?.code) && !initialLoading && !loading) {
       setLoading(true);
       setError(null);
-      
+
       // 设置一个较短的超时作为安全网，防止加载状态卡住
       const timeoutId = setTimeout(() => {
         console.warn('页面数据获取超时，强制关闭加载状态');
         setLoading(false);
       }, 2000); // 2秒超时
-      
+
       try {
         execHandler('resolvefetch', {
           id: page.id,
@@ -178,7 +191,7 @@ export default function RuntimePreview({ pageData, pageId }: RuntimePreviewProps
         setLoading(false);
         clearTimeout(timeoutId);
       }
-      
+
       // 清理函数
       return () => {
         clearTimeout(timeoutId);
@@ -189,8 +202,8 @@ export default function RuntimePreview({ pageData, pageId }: RuntimePreviewProps
   useEffect(() => {
     // 监听数据解析事件
     const handleDataResolved = (payload: any) => {
-      if (payload?.type === 'page' && 
-          (payload?.id === page?.id || payload?.code === page?.root?.code)) {
+      if (payload?.type === 'page' &&
+        (payload?.id === page?.id || payload?.code === page?.root?.code)) {
         setFormData(payload.data);
         setError(null);
         setLoading(false);
@@ -238,7 +251,7 @@ export default function RuntimePreview({ pageData, pageId }: RuntimePreviewProps
   }
 
   const roots = getPageRoots(page);
-  
+
   return (
     <div className="min-h-screen w-screen flex flex-col">
       {/* 屏蔽加载状态显示 */}
@@ -277,7 +290,7 @@ export default function RuntimePreview({ pageData, pageId }: RuntimePreviewProps
           {dlg?.content}
         </DialogContent>
       </Dialog>
-      
+
 
 
 
