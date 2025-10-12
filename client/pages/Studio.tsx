@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { createNode, createPage, NodeMeta, PageMeta, PageGroup, TemplateKind, CustomComponent, getPageRoots, setPageRoots, addPageRoot, removePageRoot } from "@/studio/types";
 import { getPage, loadPages, upsertPage, upsertCustomComponent, loadCustomComponents, deleteCustomComponent as deleteCustomComponentFromStorage, loadPageGroups, savePageGroups, upsertPageGroup, deletePageGroup, getPageGroup } from "@/studio/storage";
-import { getCachedPage, getCachedPages, upsertCachedPage, deleteCachedPage, initializePageCache, smartPreloadPages } from "@/studio/page-cache";
+import { getCachedPage, getCachedPages, upsertCachedPage, deleteCachedPage, initializePageCache, smartPreloadPages, reorderCachedPages } from "@/studio/page-cache";
 import { NodeRenderer } from "@/studio/registry";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
@@ -1854,6 +1854,18 @@ function EventsPanel({
     default: ["click", "hover"],
   };
 
+  // 监听代码编辑器打开事件（Hooks 必须在所有条件返回之前）
+  useEffect(() => {
+    const unsubscribe = bus.subscribe('codeEditor.open', (payload: any) => {
+      const { field = 'handler', currentValue = '' } = payload;
+      setEditingField(field);
+      setEditingCode(currentValue);
+      setCodeEditorOpen(true);
+    });
+
+    return unsubscribe;
+  }, []);
+
   if (!selected) return <div className="p-4 text-sm text-muted-foreground">选择一个组件以编辑事件</div>;
 
   const set = (k: string, v: any) => {
@@ -1869,15 +1881,7 @@ function EventsPanel({
     setCodeEditorOpen(true);
   };
 
-  // 监听代码编辑器打开事件
-  useEffect(() => {
-    const unsubscribe = bus.subscribe('codeEditor.open', (payload: any) => {
-      const { field = 'handler', currentValue = '', title = '代码编辑器' } = payload;
-      openCodeEditor(field, currentValue);
-    });
-
-    return unsubscribe;
-  }, []);
+  
 
 
 
@@ -7000,6 +7004,23 @@ setText("操作按钮点击事件触发！行ID: " + (payload.row?.id || "未知
   const [editingScript, setEditingScript] = useState("");
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
   const [doubleClickEditEnabled, setDoubleClickEditEnabled] = useState(true);
+  // 列表视图拖拽状态
+  const [listDraggingId, setListDraggingId] = useState<string | null>(null);
+  const [listDragOverId, setListDragOverId] = useState<string | null>(null);
+
+  const handleListDropReorder = useCallback((targetId: string) => {
+    if (!listDraggingId || listDraggingId === targetId) return;
+    const orderedIds = allPages.map(p => p.id);
+    const from = orderedIds.indexOf(listDraggingId);
+    const to = orderedIds.indexOf(targetId);
+    if (from < 0 || to < 0) return;
+    const [moved] = orderedIds.splice(from, 1);
+    orderedIds.splice(to, 0, moved);
+    reorderCachedPages(orderedIds);
+    refreshPagesList();
+    setListDraggingId(null);
+    setListDragOverId(null);
+  }, [listDraggingId, allPages]);
 
   // 检查页面是否有实质性变化（排除仅代码更新）
   const hasStructuralChanges = (current: PageMeta, previous: PageMeta | null): boolean => {
@@ -8379,13 +8400,31 @@ setText("操作按钮点击事件触发！行ID: " + (payload.row?.id || "未知
                             className={`group flex flex-col gap-1 rounded border p-2 text-xs cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${
                               p.id === page.id ? 'bg-primary/10 border-primary' : 
                               selectedPageId === p.id ? 'bg-accent border-accent-foreground' : 'hover:bg-accent'
-                            }`}
+                            } ${listDragOverId === p.id ? 'ring-2 ring-primary' : ''}`}
                             onClick={() => {
                               setSelectedPageId(p.id);
                               switchToPage(p);
                             }}
                             onFocus={() => setSelectedPageId(p.id)}
                             onMouseEnter={() => preloadPage(p.id)}
+                            draggable
+                            onDragStart={(e) => {
+                              setListDraggingId(p.id);
+                              try { e.dataTransfer.setData('text/plain', p.id); } catch {}
+                            }}
+                            onDragOver={(e) => {
+                              e.preventDefault();
+                              setListDragOverId(p.id);
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleListDropReorder(p.id);
+                            }}
+                            onDragEnd={() => {
+                              setListDragOverId(null);
+                              setListDraggingId(null);
+                            }}
                           >
                             <div className="flex items-center justify-between">
                               <div className="font-medium truncate flex-1">{p.name}</div>
@@ -8561,6 +8600,11 @@ setText("操作按钮点击事件触发！行ID: " + (payload.row?.id || "未知
                       newPage.groupId = groupId;
                       await upsertCachedPage(newPage);
                       switchToPage(newPage);
+                    }}
+                    onGroupReorderPages={(groupId, orderedIds) => {
+                      // 仅对该分组内的页面重排
+                      reorderCachedPages(orderedIds);
+                      refreshPagesList();
                     }}
                   />
                 )}

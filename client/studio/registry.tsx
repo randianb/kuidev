@@ -2149,7 +2149,7 @@ export const registry: Record<string, Renderer> = {
       const buttonSize = pagerSize === 'small' ? 'sm' : pagerSize === 'large' ? 'default' : 'sm';
       
       return (
-        <div className={`flex items-center justify-between gap-2 ${sizeClass}`}>
+        <div className={`flex items-center justify-between gap-2  border-b pb-2 ${sizeClass}`}>
           <div className="flex items-center gap-2">
             <Button 
               size={buttonSize} 

@@ -139,6 +139,46 @@ class PageCacheManager {
     this.allPages = null;
     this.isInitialized = false;
   }
+
+  // 重新排序页面：可传入完整顺序或部分页面ID顺序以在原位置内重排
+  reorderPages(orderedIds: string[]) {
+    // 确保已初始化
+    if (!this.isInitialized) {
+      this.getAllPages();
+    }
+    if (!this.allPages) return;
+
+    const idToPage = new Map<string, PageMeta>();
+    this.allPages.forEach(p => idToPage.set(p.id, p));
+    const currentIds = this.allPages.map(p => p.id);
+    const orderedSet = new Set(orderedIds);
+
+    // 如果传入的是完整序列，直接重排
+    if (orderedIds.length === currentIds.length && orderedIds.every((id, i) => currentIds.includes(id))) {
+      this.allPages = orderedIds.map(id => idToPage.get(id)!).filter(Boolean);
+      this.scheduleStorageUpdate();
+      return;
+    }
+
+    // 否则只在原位置集合内进行局部重排
+    const indices: number[] = [];
+    currentIds.forEach((id, idx) => {
+      if (orderedSet.has(id)) indices.push(idx);
+    });
+
+    // 安全保护：当索引数量与传入ID数量不一致时，回退为当前顺序
+    if (indices.length !== orderedIds.length) {
+      console.warn('[PageCacheManager] reorderPages: indices mismatch, skip.');
+      return;
+    }
+
+    const newIds = [...currentIds];
+    for (let i = 0; i < indices.length; i++) {
+      newIds[indices[i]] = orderedIds[i];
+    }
+    this.allPages = newIds.map(id => idToPage.get(id)!).filter(Boolean);
+    this.scheduleStorageUpdate();
+  }
 }
 
 // 创建全局实例
@@ -151,3 +191,4 @@ export const upsertCachedPage = (page: PageMeta) => pageCacheManager.upsertPage(
 export const deleteCachedPage = (id: string) => pageCacheManager.deletePage(id);
 export const initializePageCache = () => pageCacheManager.initialize();
 export const smartPreloadPages = () => pageCacheManager.smartPreload();
+export const reorderCachedPages = (orderedIds: string[]) => pageCacheManager.reorderPages(orderedIds);

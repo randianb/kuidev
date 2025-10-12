@@ -21,6 +21,8 @@ interface PageTreeViewProps {
   onGroupDelete: (group: PageGroup) => void;
   onPageMoveToGroup: (page: PageMeta, groupId: string | undefined) => void;
   onPageCreateInGroup: (groupId: string) => void;
+  // 在自定义分组内拖拽排序后的回调（仅当无搜索条件时启用拖拽）
+  onGroupReorderPages?: (groupId: string, orderedPageIds: string[]) => void;
 }
 
 export function PageTreeView({
@@ -38,6 +40,7 @@ export function PageTreeView({
   onGroupDelete,
   onPageMoveToGroup,
   onPageCreateInGroup,
+  onGroupReorderPages,
 }: PageTreeViewProps) {
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set(['recent', 'custom-groups', 'templates']));
   const [searchTerm, setSearchTerm] = useState('');
@@ -47,6 +50,8 @@ export function PageTreeView({
     y: number;
     groupId: string;
   } | null>(null);
+  const [draggingPageId, setDraggingPageId] = useState<string | null>(null);
+  const [dragOverPageId, setDragOverPageId] = useState<string | null>(null);
 
   // 过滤搜索结果
   const filteredPages = pages.filter(page => 
@@ -89,7 +94,7 @@ export function PageTreeView({
     setExpandedNodes(newExpanded);
   };
 
-  const renderPageCard = (page: PageMeta) => {
+  const renderPageCard = (page: PageMeta, groupId?: string) => {
     const isSelected = selectedPageId === page.id;
     const isCurrent = currentPageId === page.id;
 
@@ -103,9 +108,41 @@ export function PageTreeView({
                 : isCurrent
                 ? 'border-green-500 bg-green-50'
                 : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-            }`}
+            } ${dragOverPageId === page.id ? 'ring-2 ring-primary' : ''}`}
             onClick={() => onPageSelect(page)}
             onMouseEnter={() => onPagePreload(page.id)}
+            draggable={Boolean(groupId) && searchTerm === ''}
+            onDragStart={(e) => {
+              if (!groupId || searchTerm !== '') return;
+              setDraggingPageId(page.id);
+              try { e.dataTransfer.setData('text/plain', page.id); } catch {}
+            }}
+            onDragOver={(e) => {
+              if (!groupId || searchTerm !== '') return;
+              e.preventDefault();
+              setDragOverPageId(page.id);
+            }}
+            onDrop={(e) => {
+              if (!groupId || searchTerm !== '') return;
+              e.preventDefault();
+              e.stopPropagation();
+              setDragOverPageId(null);
+              if (!draggingPageId || draggingPageId === page.id) return;
+
+              // 仅对自定义分组进行排序
+              const groupPages = filteredPages.filter(p => p.groupId === groupId);
+              const fromIndex = groupPages.findIndex(p => p.id === draggingPageId);
+              const toIndex = groupPages.findIndex(p => p.id === page.id);
+              if (fromIndex < 0 || toIndex < 0) return;
+              const ordered = groupPages.map(p => p.id);
+              const [moved] = ordered.splice(fromIndex, 1);
+              ordered.splice(toIndex, 0, moved);
+              onGroupReorderPages && onGroupReorderPages(groupId, ordered);
+            }}
+            onDragEnd={() => {
+              setDraggingPageId(null);
+              setDragOverPageId(null);
+            }}
           >
             <div className="flex items-center space-x-2 min-w-0">
               <FileText className="w-4 h-4 text-gray-500 flex-shrink-0" />
@@ -253,7 +290,7 @@ export function PageTreeView({
           )}
           {expandedNodes.has('recent') && (
             <div className="space-y-2">
-              {recentPages.map(renderPageCard)}
+              {recentPages.map(p => renderPageCard(p))}
             </div>
           )}
         </div>
@@ -328,13 +365,13 @@ export function PageTreeView({
                   </div>
                   {expandedNodes.has(`group-${group.id}`) && (
                     <div className="space-y-2">
-                      {groupPages.map(renderPageCard)}
-                    </div>
-                  )}
+                  {groupPages.map(p => renderPageCard(p, group.id))}
                 </div>
-              );
-            })}
-          </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
         )}
       </div>
 
@@ -358,7 +395,7 @@ export function PageTreeView({
                 )}
                 {expandedNodes.has(`template-${template}`) && (
                   <div className="space-y-2">
-                    {templatePages.map(renderPageCard)}
+                    {templatePages.map(p => renderPageCard(p))}
                   </div>
                 )}
               </div>

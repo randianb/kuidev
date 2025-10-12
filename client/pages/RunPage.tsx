@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
-import { getPage } from "@/studio/storage";
+import { getPage, loadPages } from "@/studio/storage";
 import { NodeRenderer } from "@/studio/registry";
 import { bus } from "@/lib/eventBus";
 import { execHandler } from "@/lib/handlers";
@@ -171,7 +171,35 @@ export default function RunPage() {
           <DialogHeader>
             <DialogTitle>{dlg?.title ?? "提示"}</DialogTitle>
           </DialogHeader>
-          <div>{String(dlg?.content ?? "")}</div>
+          {
+            (() => {
+              const pageId = (dlg as any)?.pageId as string | undefined;
+              const pageName = (dlg as any)?.pageName as string | undefined;
+
+              // 优先通过 pageId 查找，其次通过 pageName 查找
+              let embeddedPage: PageMeta | null = null;
+              if (pageId) {
+                embeddedPage = getPage(pageId);
+              } else if (pageName) {
+                const pages = loadPages();
+                embeddedPage = pages.find((p) => p.name === pageName) || null;
+              }
+
+              if (embeddedPage) {
+                const roots = getPageRoots(embeddedPage);
+                return (
+                  <div className="min-h-[120px]">
+                    {roots.map((root) => (
+                      <NodeRenderer key={root.id} node={root} ctx={{}} />
+                    ))}
+                  </div>
+                );
+              }
+
+              // 默认渲染文本内容
+              return <div>{String((dlg as any)?.content ?? "")}</div>;
+            })()
+          }
         </DialogContent>
       </Dialog>
     </div>
