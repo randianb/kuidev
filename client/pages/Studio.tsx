@@ -4149,6 +4149,67 @@ function Inspector({
                  <div className="text-xs font-medium">功能配置</div>
                  
                  <div className="grid gap-2">
+                   <label className="text-xs">高级查询</label>
+                   <div className="flex items-center gap-2">
+                     <Switch 
+                       id="enableQueryBuilder" 
+                       checked={local.props?.enableQueryBuilder === true} 
+                       onCheckedChange={(checked) => set("enableQueryBuilder", checked)} 
+                     />
+                     <label htmlFor="enableQueryBuilder" className="text-xs">启用高级查询</label>
+                   </div>
+                 </div>
+                 
+                 {local.props?.enableQueryBuilder && (
+                   <>
+                     <div className="grid gap-2">
+                       <label className="text-xs">查询字段配置</label>
+                       <div className="p-2 bg-muted rounded text-xs">
+                         {local.props?.columns && Array.isArray(local.props.columns) && local.props.columns.length > 0 ? (
+                           <div className="space-y-1">
+                             <div className="text-muted-foreground mb-2">自动从列配置读取以下字段：</div>
+                             {local.props.columns.map((col, index) => (
+                               <div key={index} className="flex justify-between items-center">
+                                 <span className="font-medium">{col.title || col.label || col.name || col.key}</span>
+                                 <span className="text-muted-foreground">({col.key || col.dataIndex || col.field})</span>
+                               </div>
+                             ))}
+                           </div>
+                         ) : (
+                           <div className="text-muted-foreground">
+                             请先配置表格列，系统将自动生成查询字段
+                           </div>
+                         )}
+                       </div>
+                       <div className="text-xs text-muted-foreground">
+                         查询字段将自动从表格列配置中读取，无需手动配置
+                       </div>
+                     </div>
+                     
+                     <div className="grid gap-2">
+                       <label className="text-xs">查询场景配置</label>
+                       <Textarea 
+                         value={local.props?.queryBuilderScenarios ? JSON.stringify(local.props.queryBuilderScenarios, null, 2) : "[]"} 
+                         onChange={(e) => {
+                           try {
+                             const scenarios = JSON.parse(e.target.value);
+                             set("queryBuilderScenarios", scenarios);
+                           } catch (error) {
+                             // 保持输入状态，不更新属性
+                           }
+                         }}
+                         placeholder='[{"id": "1", "name": "常用查询", "description": "预设的常用查询条件", "query": {...}}]'
+                         rows={3}
+                         className="text-xs font-mono"
+                       />
+                       <div className="text-xs text-muted-foreground">
+                         配置预设的查询场景，用户可以快速加载
+                       </div>
+                     </div>
+                   </>
+                 )}
+                 
+                 <div className="grid gap-2">
                    <label className="text-xs">搜索功能</label>
                    <div className="flex items-center gap-2">
                      <Switch 
@@ -6985,7 +7046,7 @@ setText("操作按钮点击事件触发！行ID: " + (payload.row?.id || "未知
   const [accordionValue, setAccordionValue] = useState<string[]>([]);
   const [allPages, setAllPages] = useState<PageMeta[]>([]);
   const [selectedPageId, setSelectedPageId] = useState<string | null>(null);
-  const [pageViewMode, setPageViewMode] = useState<"list" | "tree">("list");
+  const [pageViewMode, setPageViewMode] = useState<"list" | "tree">("tree");
   const [pageGroups, setPageGroups] = useState<PageGroup[]>([]);
   const [groupDialog, setGroupDialog] = useState(false);
   const [editingGroup, setEditingGroup] = useState<PageGroup | null>(null);
@@ -8349,22 +8410,23 @@ setText("操作按钮点击事件触发！行ID: " + (payload.row?.id || "未知
               <div className="flex items-center justify-between mb-3 flex-shrink-0">
                 <div className="flex gap-2">
                   <div className="flex border rounded-md">
-                    <Button
-                      size="sm"
-                      variant={pageViewMode === "list" ? "default" : "ghost"}
-                      className="rounded-r-none border-r"
-                      onClick={() => setPageViewMode("list")}
-                    >
-                      <List className="h-3 w-3" />
-                    </Button>
-                    <Button
+                     <Button
                       size="sm"
                       variant={pageViewMode === "tree" ? "default" : "ghost"}
-                      className="rounded-l-none"
+                      className="rounded-r-none"
                       onClick={() => setPageViewMode("tree")}
                     >
                       <ListTree className="h-3 w-3" />
                     </Button>
+                    <Button
+                      size="sm"
+                      variant={pageViewMode === "list" ? "default" : "ghost"}
+                      className="rounded-l-none border-r"
+                      onClick={() => setPageViewMode("list")}
+                    >
+                      <List className="h-3 w-3" />
+                    </Button>
+                  
                   </div>
                   <Button
                      size="sm"

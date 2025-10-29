@@ -15,6 +15,7 @@ import Header from "@/components/site/Header";
 import Guide from "./pages/Guide";
 import Studio from "./pages/Studio";
 import CleanPreview from "./pages/CleanPreview";
+import QueryBuilderDemoPage from "./pages/QueryBuilderDemoPage";
     
 const queryClient = new QueryClient();
 
@@ -60,6 +61,7 @@ const App = () => (
                   <Route path="/" element={<Index />} />
                   <Route path="/guide" element={<Guide />} />
                   <Route path="/studio" element={<Studio />} />
+                  <Route path="/query-builder-demo" element={<QueryBuilderDemoPage />} />
                   {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                   <Route path="*" element={<NotFound />} />
                 </Routes>

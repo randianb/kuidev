@@ -144,6 +144,89 @@
     scrollbar-color: hsl(var(--muted-foreground) / 0.5) hsl(var(--muted));
   }
 
+  /* Enhanced scrollbar for scenario sidebar */
+  .scenario-scroll-area [data-radix-scroll-area-viewport] {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.6) hsl(var(--muted));
+  }
+
+  .scenario-scroll-area [data-radix-scroll-area-viewport]::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .scenario-scroll-area [data-radix-scroll-area-viewport]::-webkit-scrollbar-track {
+    background: hsl(var(--muted));
+    border-radius: 4px;
+  }
+
+  .scenario-scroll-area [data-radix-scroll-area-viewport]::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground) / 0.6);
+    border-radius: 4px;
+    border: 1px solid hsl(var(--muted));
+  }
+
+  .scenario-scroll-area [data-radix-scroll-area-viewport]::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.8);
+  }
+
+  /* Enhanced scrollbar for scenario selector dropdown */
+  .scenario-dropdown-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.6) hsl(var(--muted));
+  }
+
+  .scenario-dropdown-scroll::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .scenario-dropdown-scroll::-webkit-scrollbar-track {
+    background: hsl(var(--muted));
+    border-radius: 4px;
+  }
+
+  .scenario-dropdown-scroll::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground) / 0.6);
+    border-radius: 4px;
+    border: 1px solid hsl(var(--muted));
+  }
+
+  .scenario-dropdown-scroll::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.8);
+  }
+
+  /* Enhanced scrollbar for GroupNode scroll area using Radix UI ScrollArea */
+  .group-node-scroll [data-radix-scroll-area-scrollbar] {
+    width: 10px;
+    background: hsl(var(--muted) / 0.3);
+    border-radius: 5px;
+  }
+
+  .group-node-scroll [data-radix-scroll-area-thumb] {
+    background: hsl(var(--muted-foreground) / 0.6) !important;
+    border-radius: 5px;
+    transition: background-color 0.2s ease;
+    min-height: 20px;
+  }
+
+  .group-node-scroll [data-radix-scroll-area-thumb]:hover {
+    background: hsl(var(--muted-foreground) / 0.8) !important;
+  }
+
+  .group-node-scroll [data-radix-scroll-area-scrollbar][data-orientation="vertical"] {
+    border-left: none;
+    padding: 2px;
+  }
+
+  /* 确保滚动条始终可见 */
+  .group-node-scroll [data-radix-scroll-area-scrollbar][data-state="visible"] {
+    opacity: 1;
+  }
+
+  .group-node-scroll [data-radix-scroll-area-scrollbar][data-state="hidden"] {
+    opacity: 0.6;
+    transition: opacity 0.2s ease;
+  }
+
   /* Disable hero gradients for base white/black themes */
   html[data-theme="white"] .hero-gradient,
   html[data-theme="black"] .hero-gradient {
