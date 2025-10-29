@@ -2745,7 +2745,7 @@ export const registry: Record<string, Renderer> = {
               <DialogHeader>
                 <DialogTitle>场景管理</DialogTitle>
               </DialogHeader>
-              <div className="overflow-y-auto">
+              <div className="overflow-y-auto ">
                 <ScenarioManager
                   scenarios={queryBuilderScenarios}
                   currentQuery={currentQuery}

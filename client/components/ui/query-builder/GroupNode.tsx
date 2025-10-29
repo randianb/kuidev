@@ -91,7 +91,7 @@ export function GroupNode({
   };
 
   return (
-    <Card className={cn("relative h-full", getGroupColor(), className)} style={getIndentStyle()}>
+    <Card className={cn("relative h-full",  className)} style={getIndentStyle()}>
 
       <CardContent className="flex flex-col h-full  p-4">
         {/* 组头部 */}

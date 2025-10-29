@@ -8,6 +8,7 @@ import { Separator } from '@/components/ui/separator';
 import { Download, Upload, Search, Filter } from 'lucide-react';
 import { QueryScenario, QueryRoot } from './types';
 import { ScenarioCard, NewScenarioCard } from './ScenarioCard';
+import { Card } from '../card';
 
 interface ScenarioSidebarProps {
   scenarios: QueryScenario[];
@@ -59,7 +60,7 @@ export function ScenarioSidebar({
   };
 
   return (
-    <div className="w-60 border-r bg-muted/30 flex flex-col h-full ">
+    <Card className="w-60 border-r bg-muted/30 flex flex-col h-full ">
       {/* 头部 */}
       <div className="p-4 border-b">
         <h3 className="text-lg font-semibold mb-3">查询场景</h3>
@@ -175,6 +176,6 @@ export function ScenarioSidebar({
           {searchTerm && ` · 显示 ${filteredScenarios.length} 个`}
         </p>
       </div>
-    </div>
+    </Card>
   );
 }

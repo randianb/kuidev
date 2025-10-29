@@ -183,7 +183,7 @@ export function QueryBuilder({
       {/* 右侧主要内容区域 */}
       <div className="flex-1 flex flex-col min-w-0 ">
         {/* 头部工具栏 */}
-        <Card className="m-4 mb-0">
+        <Card className="m-4 mt-0">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -255,7 +255,7 @@ export function QueryBuilder({
         </Card>
 
         {/* 主要内容区域 */}
-        <div className="flex-1 min-h-0 overflow-hidden p-4 space-y-4">
+        <Card className="flex-1 min-h-0 overflow-hidden mx-4 space-y-4">
           {/* 查询构建区域 */}
           <GroupNode
             group={query}
@@ -325,7 +325,7 @@ export function QueryBuilder({
                />
              </CardContent>
           </Card> */}
-        </div>
+        </Card>
       </div>
     </div>
   );

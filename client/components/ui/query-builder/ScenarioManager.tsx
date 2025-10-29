@@ -84,7 +84,7 @@ export function ScenarioManager({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4  my-4   mx-4">
       {/* 操作按钮 */}
       <div className="flex gap-2 flex-wrap">
         <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
