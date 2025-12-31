@@ -9,6 +9,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, useNavigate } from "react-router-dom";
 import { useEffect } from "react";
+import { AuthProvider } from "react-oidc-context";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import Header from "@/components/site/Header";
@@ -41,35 +42,52 @@ function NavigationListener() {
   return null;
 }
 
+const oidcConfig = {
+  authority: import.meta.env.VITE_IDSRV_AUTHORITY,
+  client_id: import.meta.env.VITE_CLIENT_ID,
+  redirect_uri: import.meta.env.VITE_REDIRECT_URI,
+  post_logout_redirect_uri: import.meta.env.VITE_POST_LOGOUT_REDIRECT_URI,
+  response_type: "code",
+  scope: import.meta.env.VITE_SCOPE,
+  automaticSilentRenew: true,
+  loadUserInfo: true,
+};
+
+function OidcCallback() { return null; }
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <BrowserRouter>
-        <NavigationListener />
-        <Routes>
-          {/* 预览页面独立渲染，不包含头部 */}
-          <Route path="/preview/:id" element={<CleanPreview />} />
-           
-          {/* 其他页面包含头部和布局 */}
-          <Route path="/*" element={
-            <div className="flex h-screen flex-col overflow-hidden">
-              <Header />
-              <main className="flex-1 min-h-0 overflow-hidden">
-                <Routes>
-                  <Route path="/" element={<Index />} />
-                  <Route path="/guide" element={<Guide />} />
-                  <Route path="/studio" element={<Studio />} />
-                  <Route path="/query-builder-demo" element={<QueryBuilderDemoPage />} />
-                  {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
-              </main>
-            </div>
-          } />
-        </Routes>
-      </BrowserRouter>
+      <AuthProvider
+        {...oidcConfig}
+        onSigninCallback={() => {
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }}
+      >
+        <BrowserRouter>
+          <NavigationListener />
+          <Routes>
+            <Route path="/preview/:id" element={<CleanPreview />} />
+            <Route path="/*" element={
+              <div className="flex h-screen flex-col overflow-hidden">
+                <Header />
+                <main className="flex-1 min-h-0 overflow-hidden">
+                  <Routes>
+                    <Route path="/" element={<Index />} />
+                    <Route path="/guide" element={<Guide />} />
+                    <Route path="/studio" element={<Studio />} />
+                    <Route path="/query-builder-demo" element={<QueryBuilderDemoPage />} />
+                    <Route path="/oidc-callback" element={<OidcCallback />} />
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+                </main>
+              </div>
+            } />
+          </Routes>
+        </BrowserRouter>
+      </AuthProvider>
     </TooltipProvider>
   </QueryClientProvider>
 );

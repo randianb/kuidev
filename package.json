@@ -29,6 +29,8 @@
     "dotenv": "^17.2.1",
     "express": "^5.1.0",
     "monaco-editor": "^0.53.0",
+    "oidc-client-ts": "^3.4.1",
+    "react-oidc-context": "^3.3.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {

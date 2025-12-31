@@ -201,7 +201,7 @@ export const themes: ThemeDef[] = (() => {
   ];
   baseHues.forEach((h, i) => {
     const fancyName = lightNames[i] ?? `亮色·${h}°`;
-    out.push(createTheme(`light-${i}`, fancyName, h, undefined, radii[i % radii.length]));
+    out.push(createTheme(`light-${i}`, fancyName, h, undefined, radii[i % 4]));
   });
   // pick 12 dark variations for diversity
   // 自定义暗色主题的中文命名，参考 tweakcn 的命名风格
@@ -221,7 +221,7 @@ export const themes: ThemeDef[] = (() => {
   ];
   [250, 280, 200, 160, 120, 90, 60, 30, 0, 330, 300, 270].forEach((h, idx) => {
     const fancyName = darkNames[idx] ?? `暗色·${h}°`;
-    out.push(createDark(`dark-${idx}`, fancyName, h, undefined, radii[(idx + 2) % radii.length]));
+    out.push(createDark(`dark-${idx}`, fancyName, h, undefined, radii[(idx + 2) % 4]));
   });
   return out; // 2 + 33 + 12 = 47
 })();

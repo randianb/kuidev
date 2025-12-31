@@ -259,6 +259,16 @@ const handlers: Record<string, NamedHandler> = {
       if (!formData) {
         let response;
         
+        const tokenKey = `oidc.user:${import.meta.env.VITE_IDSRV_AUTHORITY}:${import.meta.env.VITE_CLIENT_ID}`;
+        const storedUser = sessionStorage.getItem(tokenKey) ?? localStorage.getItem(tokenKey);
+        const accessToken = (() => {
+          try {
+            return storedUser ? JSON.parse(storedUser)?.access_token ?? null : null;
+          } catch {
+            return null;
+          }
+        })();
+        const authHeaders = accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
         if (sendFormData) {
           // POST 请求：发送当前表单数据
           const currentFormData = ctx.getAllFormValues();
@@ -268,6 +278,7 @@ const handlers: Record<string, NamedHandler> = {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
+              ...authHeaders,
             },
             body: JSON.stringify({
               id,
@@ -285,7 +296,11 @@ const handlers: Record<string, NamedHandler> = {
           if (getFormData) queryParams.append('getFormData', 'true');
           
           console.log('从 API 获取数据:', `/api/resolve-form?${queryParams.toString()}`);
-          response = await fetch(`/api/resolve-form?${queryParams.toString()}`);
+          response = await fetch(`/api/resolve-form?${queryParams.toString()}`, {
+            headers: {
+              ...authHeaders,
+            },
+          });
         }
         
         if (!response.ok) {

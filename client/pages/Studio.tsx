@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import { Component } from "react";
 import { createNode, createPage, NodeMeta, PageMeta, PageGroup, TemplateKind, CustomComponent, getPageRoots, setPageRoots, addPageRoot, removePageRoot } from "@/studio/types";
 import { getPage, loadPages, upsertPage, upsertCustomComponent, loadCustomComponents, deleteCustomComponent as deleteCustomComponentFromStorage, loadPageGroups, savePageGroups, upsertPageGroup, deletePageGroup, getPageGroup } from "@/studio/storage";
 import { getCachedPage, getCachedPages, upsertCachedPage, deleteCachedPage, initializePageCache, smartPreloadPages, reorderCachedPages } from "@/studio/page-cache";
@@ -77,6 +78,22 @@ function formatJavaScript(code: string): string {
   } catch (error) {
     console.warn('格式化 JavaScript 代码时出错:', error);
     return code; // 如果格式化失败，返回原始代码
+  }
+}
+
+class ErrorBoundary extends Component<{ children: React.ReactNode }, { hasError: boolean }>{
+  state = { hasError: false };
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(error: any, info: any) { console.error("ErrorBoundary caught", error, info); }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-3 border bg-destructive/10 text-destructive rounded">
+          组件渲染出现问题
+        </div>
+      );
+    }
+    return this.props.children;
   }
 }
 
@@ -8606,6 +8623,7 @@ setText("操作按钮点击事件触发！行ID: " + (payload.row?.id || "未知
                   </>
                 ) : (
                   // 树视图
+                  <ErrorBoundary>
                   <PageTreeView
                     pages={allPages}
                     groups={pageGroups}
@@ -8669,6 +8687,7 @@ setText("操作按钮点击事件触发！行ID: " + (payload.row?.id || "未知
                       refreshPagesList();
                     }}
                   />
+                  </ErrorBoundary>
                 )}
                 </div>
               </div>

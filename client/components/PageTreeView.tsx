@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { ChevronDown, ChevronRight, Copy, X, Folder, FolderOpen, FileText, Plus, Edit, Search, Trash2, Minus, Navigation, Hash } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { PageMeta, PageGroup } from '@/studio/types';
 import { navigateToPage } from '@/lib/navigation';
+import { cn } from '@/lib/utils';
 
 interface PageTreeViewProps {
   pages: PageMeta[];
@@ -102,13 +104,12 @@ export function PageTreeView({
       <ContextMenu key={page.id}>
         <ContextMenuTrigger asChild>
           <div
-            className={`ml-6 p-3 border rounded-lg cursor-pointer transition-all relative group ${
-              isSelected
-                ? 'border-blue-500 bg-blue-50'
-                : isCurrent
-                ? 'border-green-500 bg-green-50'
-                : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-            } ${dragOverPageId === page.id ? 'ring-2 ring-primary' : ''}`}
+            className={cn(
+              'ml-6 p-3 border bg-card text-card-foreground shadow-sm cursor-pointer transition-all relative group',
+              isSelected && 'ring-1 ring-primary/30 bg-primary/5',
+              !isSelected && isCurrent && 'ring-1 ring-primary/10 bg-muted/30',
+              dragOverPageId === page.id && 'ring-2 ring-primary'
+            )}
             onClick={() => onPageSelect(page)}
             onMouseEnter={() => onPagePreload(page.id)}
             draggable={Boolean(groupId) && searchTerm === ''}
@@ -128,8 +129,6 @@ export function PageTreeView({
               e.stopPropagation();
               setDragOverPageId(null);
               if (!draggingPageId || draggingPageId === page.id) return;
-
-              // 仅对自定义分组进行排序
               const groupPages = filteredPages.filter(p => p.groupId === groupId);
               const fromIndex = groupPages.findIndex(p => p.id === draggingPageId);
               const toIndex = groupPages.findIndex(p => p.id === page.id);
@@ -143,24 +142,23 @@ export function PageTreeView({
               setDraggingPageId(null);
               setDragOverPageId(null);
             }}
+            style={{ borderRadius: 'min(calc(var(--radius) - 2px), 0.75rem)' }}
           >
             <div className="flex items-center space-x-2 min-w-0">
-              <FileText className="w-4 h-4 text-gray-500 flex-shrink-0" />
-              <span 
-                className="font-medium text-sm truncate flex-1 min-w-0" 
+              <FileText className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+              <span
+                className="font-medium text-sm truncate flex-1 min-w-0"
                 title={page.name}
               >
                 {page.name}
               </span>
               {page.template && (
-                <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded flex-shrink-0 whitespace-nowrap">
+                <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded flex-shrink-0 whitespace-nowrap">
                   {page.template}
                 </span>
               )}
             </div>
-            
-            {/* 悬停时显示的浮动按钮 */}
-            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center space-x-1 bg-white rounded-md shadow-sm border border-gray-200 p-1">
+            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center space-x-1 bg-background rounded-md shadow-sm border border-border p-1">
               <Button
                 variant="ghost"
                 size="sm"
@@ -168,12 +166,11 @@ export function PageTreeView({
                   e.stopPropagation();
                   onPageCopy(page);
                 }}
-                className="h-6 w-6 p-0 hover:bg-gray-100"
+                className="h-6 w-6 p-0 hover:bg-muted"
                 title="复制页面"
               >
                 <Copy className="w-3 h-3" />
               </Button>
-              
               <Button
                 variant="ghost"
                 size="sm"
@@ -181,15 +178,14 @@ export function PageTreeView({
                   e.stopPropagation();
                   onPageDelete(page);
                 }}
-                className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                className="h-6 w-6 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
                 title="删除页面"
               >
                 <X className="w-3 h-3" />
               </Button>
             </div>
-            
             {page.updatedAt && (
-              <div className="text-xs text-gray-400 mt-1">
+              <div className="text-xs text-muted-foreground mt-1">
                 更新于 {new Date(page.updatedAt).toLocaleString()}
               </div>
             )}
@@ -238,19 +234,19 @@ export function PageTreeView({
     const isExpanded = expandedNodes.has(groupId);
     
     return (
-      <div className="flex items-center justify-between p-2 hover:bg-gray-50 rounded">
+      <div className="flex items-center justify-between p-2 hover:bg-muted/40 rounded-md">
         <div
           className="flex items-center space-x-2 cursor-pointer flex-1"
           onClick={() => toggleExpanded(groupId)}
         >
           {isExpanded ? (
-            <Minus className="w-4 h-4 text-gray-600" />
+            <Minus className="w-4 h-4 text-muted-foreground" />
           ) : (
-            <Plus className="w-4 h-4 text-gray-600" />
+            <Plus className="w-4 h-4 text-muted-foreground" />
           )}
           {icon}
           <span className="font-medium text-sm">{title}</span>
-          <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+          <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
             {count}
           </span>
         </div>
@@ -270,7 +266,7 @@ export function PageTreeView({
     >
       {/* 搜索框 */}
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <Input
           placeholder="搜索页面..."
           value={searchTerm}
@@ -390,7 +386,7 @@ export function PageTreeView({
                 {renderGroupHeader(
                   `template-${template}`,
                   template === 'default' ? '默认模板' : template,
-                  <FileText className="w-4 h-4 text-gray-500" />,
+                  <FileText className="w-4 h-4 text-muted-foreground" />,
                   templatePages.length
                 )}
                 {expandedNodes.has(`template-${template}`) && (
@@ -407,7 +403,7 @@ export function PageTreeView({
       {/* 右键菜单 */}
       {contextMenu && (
         <div
-          className="fixed bg-white border border-gray-200 rounded-md shadow-lg z-50 py-1"
+          className="fixed bg-background border border-border rounded-md shadow-lg z-50 py-1"
           style={{
             left: contextMenu.x,
             top: contextMenu.y,
@@ -415,7 +411,7 @@ export function PageTreeView({
           onClick={(e) => e.stopPropagation()}
         >
           <div
-            className="px-3 py-2 text-sm hover:bg-gray-100 cursor-pointer flex items-center space-x-2"
+            className="px-3 py-2 text-sm hover:bg-muted cursor-pointer flex items-center space-x-2"
             onClick={() => {
               onPageCreateInGroup(contextMenu.groupId);
               setContextMenu(null);
