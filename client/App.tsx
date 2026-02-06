@@ -55,7 +55,17 @@ const oidcConfig = {
 
 function OidcCallback() { return null; }
 
-const App = () => (
+const isPreviewRoute = window.location.pathname.startsWith("/preview/");
+
+const PreviewOnlyApp = () => (
+  <BrowserRouter>
+    <Routes>
+      <Route path="/preview/:id" element={<CleanPreview />} />
+    </Routes>
+  </BrowserRouter>
+);
+
+const MainApp = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
@@ -69,7 +79,6 @@ const App = () => (
         <BrowserRouter>
           <NavigationListener />
           <Routes>
-            <Route path="/preview/:id" element={<CleanPreview />} />
             <Route path="/*" element={
               <div className="flex h-screen flex-col overflow-hidden">
                 <Header />
@@ -91,5 +100,7 @@ const App = () => (
     </TooltipProvider>
   </QueryClientProvider>
 );
+
+const App = () => (isPreviewRoute ? <PreviewOnlyApp /> : <MainApp />);
 
 createRoot(document.getElementById("root")!).render(<App />);
