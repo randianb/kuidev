@@ -26,6 +26,7 @@ import Editor from "@monaco-editor/react";
 import { generateUUID } from "@/lib/utils";
 import { getSpacingClasses } from "@/studio/utils/spacing";
 import { migratePageSpacing } from "@/studio/utils/migration";
+import { scadaStencils, createScadaNode } from "@/studio/scada-catalog";
 
 // JavaScript 代码格式化函数
 function formatJavaScript(code: string): string {
@@ -199,6 +200,21 @@ function Canvas({
     walk(rootCopy);
     setPage({ ...page, root: rootCopy, updatedAt: Date.now() });
   };
+  const createScadaChild = (parentId: string, stencilKey: string) => {
+    const walk = (n: NodeMeta): boolean => {
+      if (n.id === parentId) {
+        if (!containerTypes.includes(n.type)) return true;
+        const scadaNode = createScadaNode(stencilKey);
+        n.children = [...(n.children ?? []), scadaNode];
+        return true;
+      }
+      return (n.children ?? []).some((c) => walk(c));
+    };
+    const rootCopy = structuredClone(page.root) as NodeMeta;
+    walk(rootCopy);
+    setPage({ ...page, root: rootCopy, updatedAt: Date.now() });
+  };
+
 
   return (
     <div className="h-full overflow-hidden">
@@ -214,6 +230,7 @@ function Canvas({
             moveAsChild,
             createChild,
             createCustomChild,
+            createScadaChild,
             rootNode: page.root,
             onPanelSizeChange,
             onCopy,
@@ -305,6 +322,21 @@ function SplitPreview({
     commit({ ...page, root: rootCopy, updatedAt: Date.now() });
   };
   
+  const createScadaChild = (parentId: string, stencilKey: string) => {
+    const walk = (n: NodeMeta): boolean => {
+      if (n.id === parentId) {
+        if (!containerTypes.includes(n.type)) return true;
+        const scadaNode = createScadaNode(stencilKey);
+        n.children = [...(n.children ?? []), scadaNode];
+        return true;
+      }
+      return (n.children ?? []).some((c) => walk(c));
+    };
+    const rootCopy = structuredClone(page.root) as NodeMeta;
+    walk(rootCopy);
+    commit({ ...page, root: rootCopy, updatedAt: Date.now() });
+  };
+
   useEffect(() => {
     const unsub = bus.subscribe("dialog.open", (payload: any) => {
       setDlg(payload || {});
@@ -329,6 +361,7 @@ function SplitPreview({
                   moveAsChild,
                   createChild,
                   createCustomChild,
+                  createScadaChild,
                   rootNode: page.root,
                   onPanelSizeChange,
                   onCopy,
@@ -2797,6 +2830,11 @@ function Inspector({
                 <SelectItem value="admin">管理后台</SelectItem>
                 <SelectItem value="grid">网格布局</SelectItem>
                 <SelectItem value="dashboard">仪表板</SelectItem>
+                <SelectItem value="scada2d">SCADA 2D建模</SelectItem>
+                <SelectItem value="scada-engine-assembly">发动机装配车间</SelectItem>
+                <SelectItem value="scada-auto-assembly">汽车装配车间</SelectItem>
+                <SelectItem value="scada-casting">铸造车间</SelectItem>
+                <SelectItem value="scada-machining">机加车间</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -8227,6 +8265,13 @@ setText("操作按钮点击事件触发！行ID: " + (payload.row?.id || "未知
       { template: "email", label: "邮件布局", description: "左右分栏的邮件应用布局" },
       { template: "home", label: "主页布局", description: "带顶部Banner的主页布局" },
       { template: "admin", label: "管理后台", description: "带侧边栏的管理后台布局" },
+      { template: "scada2d", label: "SCADA 2D建模", description: "包含2D组态画布、浮窗容器、温度/电压/进度/安灯告警示例" },
+    ],
+    "工艺模板": [
+      { template: "scada-engine-assembly", label: "发动机装配车间", description: "缸体/曲轴/冷试等装配工艺看板" },
+      { template: "scada-auto-assembly", label: "汽车装配车间", description: "内饰/底盘/路试与AGV配送流程" },
+      { template: "scada-casting", label: "铸造车间", description: "熔炼-压铸-冷却全流程监控" },
+      { template: "scada-machining", label: "机加车间", description: "切削机群、刀具寿命、压检与追溯" },
     ],
   };
 
@@ -8416,10 +8461,11 @@ setText("操作按钮点击事件触发！行ID: " + (payload.row?.id || "未知
     <div className="grid h-[calc(100vh-4rem)] grid-cols-[260px_1fr_300px]">
       <div className="border-r h-full flex flex-col ">
         <Tabs defaultValue="pages" className="w-full h-full flex flex-col">
-          <TabsList className="grid w-full grid-cols-3 flex-shrink-0">
+          <TabsList className="grid w-full grid-cols-4 flex-shrink-0">
             <TabsTrigger value="pages">页面</TabsTrigger>
             <TabsTrigger value="layouts">布局</TabsTrigger>
             <TabsTrigger value="components">组件库</TabsTrigger>
+            <TabsTrigger value="scada">组态库</TabsTrigger>
           </TabsList>
           
           <TabsContent value="pages" className="mt-3 relative flex-1 min-h-0 ml-3" >
@@ -8848,6 +8894,42 @@ setText("操作按钮点击事件触发！行ID: " + (payload.row?.id || "未知
               </div>
             </div>
           </TabsContent>
+
+          <TabsContent value="scada" className="mt-3 relative flex-1 min-h-0 ml-3">
+            <div className="absolute inset-0 overflow-y-auto pr-2">
+              <div className="mb-2 rounded border border-cyan-500/30 bg-cyan-500/5 p-2 text-xs">
+                <div className="font-medium">SCADA 组态库（独立于组件库）</div>
+                <div className="text-muted-foreground mt-1">已预置 three.js 依赖，可在后续将这些组态元件升级为 2D/3D 混合渲染。</div>
+              </div>
+              <div className="space-y-3">
+                {(["物流设备", "汽车工艺设备", "能源与公用工程", "通用监控"] as const).map((category) => (
+                  <div key={category}>
+                    <div className="mb-1 text-[11px] font-semibold text-cyan-600">{category}</div>
+                    <div className="grid gap-2">
+                      {scadaStencils.filter((item) => item.category === category).map((item) => (
+                        <div
+                          key={item.key}
+                          className="flex cursor-pointer items-center gap-2 rounded border p-2 text-xs hover:bg-accent"
+                          draggable
+                          onDragStart={(e) => {
+                            e.dataTransfer.setData("application/x-scada-symbol", JSON.stringify({ key: item.key }));
+                            e.dataTransfer.setData("text/plain", "scada-symbol");
+                            e.dataTransfer.effectAllowed = "copy";
+                          }}
+                        >
+                          <i className={`${item.icon} text-base text-cyan-500`}></i>
+                          <div className="min-w-0">
+                            <div className="font-medium">{item.label}</div>
+                            <div className="text-muted-foreground truncate">{item.description}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </TabsContent>
         </Tabs>
       </div>
       <div className="bg-muted/20 flex h-full flex-col">
@@ -9068,6 +9150,7 @@ setText("操作按钮点击事件触发！行ID: " + (payload.row?.id || "未知
             </div>
           </div>
           </TabsContent>
+
         </Tabs>
       </div>
       <CommandK open={cmdOpen} setOpen={setCmdOpen} lib={libItems} existing={collectExisting(page.root)} onChoose={addByKey} />
