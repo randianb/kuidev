@@ -32,6 +32,7 @@ export type ComponentType =
   | "Separator"
   | "Avatar"
   | "Progress"
+  | "Chart"
   | "Skeleton"
   | "Tooltip"
   | "Popover"

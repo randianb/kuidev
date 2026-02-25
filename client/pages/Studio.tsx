@@ -101,6 +101,213 @@ class ErrorBoundary extends Component<{ children: React.ReactNode }, { hasError:
 // 容器类型定义 - 可以包含子组件的组件类型
 const containerTypes = ["Container", "Card", "CollapsibleCard", "ActionCard", "InfoCard", "StatsCard", "NavigationControls", "NestedPageContainer"];
 
+const componentCategoryMap: Record<string, "layout" | "form" | "data" | "feedback" | "overlay" | "navigation" | "utility"> = {
+  Container: "layout",
+  Grid: "layout",
+  GridItem: "layout",
+  Card: "layout",
+  CollapsibleCard: "layout",
+  ActionCard: "layout",
+  InfoCard: "layout",
+  StatsCard: "layout",
+  Separator: "layout",
+  NestedPageContainer: "layout",
+  Header: "navigation",
+  Tabs: "navigation",
+  PageTab: "navigation",
+  Accordion: "navigation",
+  Collapsible: "navigation",
+  NavigationControls: "navigation",
+  Input: "form",
+  NumberInput: "form",
+  Textarea: "form",
+  Select: "form",
+  MultiSelect: "form",
+  Lookup: "form",
+  Switch: "form",
+  Slider: "form",
+  DatePicker: "form",
+  DateRangePicker: "form",
+  RichTextEditor: "form",
+  Button: "form",
+  SubmitButton: "form",
+  Label: "form",
+  Table: "data",
+  EditableTable: "data",
+  Chart: "data",
+  Tree: "data",
+  Transfer: "data",
+  Avatar: "feedback",
+  Badge: "feedback",
+  Progress: "feedback",
+  Skeleton: "feedback",
+  Alert: "feedback",
+  Tooltip: "overlay",
+  Popover: "overlay",
+  Dialog: "overlay",
+  Drawer: "overlay",
+  Sheet: "overlay",
+  HoverCard: "overlay",
+  Upload: "utility",
+  Iframe: "utility",
+  ScriptEditor: "utility",
+  Listener: "utility",
+  EventListener: "utility",
+  Link: "utility",
+  Image: "utility",
+};
+
+const categoryGuides = {
+  layout: {
+    summary: "布局类组件建议优先配置容器结构、间距和响应式行为。",
+    propTips: ["className", "style", "padding / margin", "子节点结构"],
+    recommendedEvents: ["click"],
+  },
+  form: {
+    summary: "表单类组件建议完善状态、验证、禁用态与交互反馈。",
+    propTips: ["placeholder / text", "required", "disabled", "defaultValue"],
+    recommendedEvents: ["change", "keydown", "click"],
+  },
+  data: {
+    summary: "数据类组件建议配置数据源映射、分页排序及行级交互。",
+    propTips: ["data / columns", "分页", "排序", "字段映射"],
+    recommendedEvents: ["rowClick", "selectionChange", "sortChange", "pageChange"],
+  },
+  feedback: {
+    summary: "展示反馈组件建议明确文案层级与状态色，避免过度交互。",
+    propTips: ["text / title", "variant", "icon", "className"],
+    recommendedEvents: ["click", "hover"],
+  },
+  overlay: {
+    summary: "弹层组件建议配置打开/关闭策略与焦点管理。",
+    propTips: ["open", "trigger", "位置与尺寸", "遮罩行为"],
+    recommendedEvents: ["click", "hover"],
+  },
+  navigation: {
+    summary: "导航组件建议保证路径、当前态与可回退行为一致。",
+    propTips: ["to / href", "active 状态", "层级结构", "可访问性"],
+    recommendedEvents: ["click", "change"],
+  },
+  utility: {
+    summary: "功能组件建议优先明确输入输出契约，避免隐式副作用。",
+    propTips: ["code / script", "参数映射", "安全策略", "错误兜底"],
+    recommendedEvents: ["click", "change"],
+  },
+};
+
+const componentPropHints: Record<string, string[]> = {
+  Container: ["layout", "className", "padding", "children"],
+  Grid: ["cols", "gap", "responsive", "dataSource"],
+  Card: ["title", "description", "className", "style"],
+  Input: ["placeholder", "defaultValue", "required", "disabled"],
+  NumberInput: ["min", "max", "step", "defaultValue"],
+  Textarea: ["placeholder", "rows", "required", "disabled"],
+  Select: ["options", "defaultValue", "placeholder", "disabled"],
+  MultiSelect: ["options", "defaultValue", "maxCount", "disabled"],
+  Lookup: ["dataSource", "labelField", "valueField", "placeholder"],
+  Switch: ["checked", "disabled", "label", "description"],
+  Slider: ["min", "max", "step", "defaultValue"],
+  DatePicker: ["format", "placeholder", "disabled", "defaultValue"],
+  DateRangePicker: ["format", "placeholder", "disabled", "defaultValue"],
+  Button: ["text", "variant", "size", "disabled"],
+  SubmitButton: ["text", "loadingText", "variant", "disabled"],
+  Table: ["columns", "data", "pageSize", "selectable"],
+  Chart: ["chartType", "xField", "series", "dataSource"],
+  EditableTable: ["columns", "data", "editable", "rowActions"],
+  Dialog: ["title", "description", "open", "trigger"],
+  Drawer: ["title", "description", "open", "side"],
+  Sheet: ["title", "description", "open", "side"],
+  Tabs: ["defaultValue", "tabs", "orientation", "className"],
+  Accordion: ["type", "collapsible", "defaultValue", "className"],
+  NavigationControls: ["showBack", "showForward", "showHome", "compact"],
+  Link: ["text", "href", "target", "underline"],
+  Image: ["src", "alt", "fit", "radius"],
+};
+
+const getComponentCategory = (componentType: string) => componentCategoryMap[componentType] || "utility";
+
+const getAvailableEventTypesByComponent = (componentType: string) => {
+  const explicit = componentEventMap[componentType];
+  if (explicit && explicit.length > 0) return explicit;
+
+  const category = getComponentCategory(componentType);
+  const fromGuide = categoryGuides[category].recommendedEvents;
+  const merged = Array.from(new Set([...fromGuide, ...componentEventMap.default]));
+  return merged;
+};
+
+const componentEventMap: Record<string, string[]> = {
+  Button: ["click", "hover", "keydown"],
+  SubmitButton: ["click", "keydown"],
+  Input: ["change", "keydown", "focus", "blur"],
+  NumberInput: ["change", "keydown", "focus", "blur"],
+  Textarea: ["change", "keydown", "focus", "blur"],
+  RichTextEditor: ["change", "focus", "blur"],
+  Select: ["change", "focus", "blur"],
+  MultiSelect: ["change", "focus", "blur"],
+  Lookup: ["change", "focus", "blur"],
+  Switch: ["change"],
+  Slider: ["change"],
+  DatePicker: ["change", "focus", "blur"],
+  DateRangePicker: ["change", "focus", "blur"],
+  Link: ["click", "hover"],
+  Image: ["click", "hover"],
+  Upload: ["change", "click"],
+  Dialog: ["click", "change"],
+  Drawer: ["click", "change"],
+  Sheet: ["click", "change"],
+  Popover: ["click", "hover"],
+  Tooltip: ["hover"],
+  HoverCard: ["hover", "click"],
+  Tabs: ["change", "click"],
+  Accordion: ["change", "click"],
+  Collapsible: ["change", "click"],
+  NavigationControls: ["click"],
+  Table: ["rowClick", "rowSelect", "rowDoubleClick", "cellClick", "headerClick", "sortChange", "pageChange", "selectionChange", "rowHover", "actionClick"],
+  EditableTable: ["change", "rowClick", "selectionChange"],
+  Chart: ["click", "dataPointClick"],
+  Tree: ["click", "change"],
+  Transfer: ["change", "click"],
+  default: ["click", "hover"],
+};
+
+const eventTypeLabels: Record<string, string> = {
+  click: "点击",
+  hover: "悬停",
+  keydown: "按键",
+  change: "值变化",
+  focus: "获得焦点",
+  blur: "失去焦点",
+  rowClick: "行点击",
+  rowSelect: "行选择",
+  rowDoubleClick: "行双击",
+  cellClick: "单元格点击",
+  headerClick: "表头点击",
+  sortChange: "排序变化",
+  pageChange: "分页变化",
+  selectionChange: "选择变化",
+  rowHover: "行悬停",
+  actionClick: "操作按钮点击",
+  dataPointClick: "数据点点击",
+};
+
+const eventTypeDescriptions: Record<string, string> = {
+  rowClick: "当用户点击表格行时触发",
+  rowSelect: "当用户选择/取消选择行时触发",
+  rowDoubleClick: "当用户双击表格行时触发",
+  cellClick: "当用户点击单元格时触发",
+  headerClick: "当用户点击表头时触发",
+  sortChange: "当表格排序发生变化时触发",
+  pageChange: "当分页发生变化时触发",
+  selectionChange: "当选择的行发生变化时触发",
+  rowHover: "当鼠标悬停在行上时触发",
+  actionClick: "当点击操作列按钮时触发",
+  dataPointClick: "当点击图表中的数据点时触发",
+  change: "组件值发生变化时触发",
+  focus: "组件获得焦点时触发",
+  blur: "组件失去焦点时触发",
+};
+
 // 多根节点渲染组件
 function MultiRootRenderer({ 
   page, 
@@ -1646,43 +1853,8 @@ function EventsPanel({
     }
   };
   
-  // 获取事件类型的中文标签
-  const getEventTypeLabel = (type: string) => {
-    const labels: Record<string, string> = {
-      click: "点击",
-      hover: "悬停",
-      keydown: "按键",
-      change: "值变化",
-      rowClick: "行点击",
-      rowSelect: "行选择",
-      rowDoubleClick: "行双击",
-      cellClick: "单元格点击",
-      headerClick: "表头点击",
-      sortChange: "排序变化",
-      pageChange: "分页变化",
-      selectionChange: "选择变化",
-      rowHover: "行悬停",
-      actionClick: "操作按钮点击"
-    };
-    return labels[type] || type;
-  };
-  
-  // 获取事件描述
-  const getEventDescription = (type: string) => {
-    const descriptions: Record<string, string> = {
-      rowClick: "当用户点击表格行时触发",
-      rowSelect: "当用户选择/取消选择行时触发",
-      rowDoubleClick: "当用户双击表格行时触发",
-      cellClick: "当用户点击单元格时触发",
-      headerClick: "当用户点击表头时触发",
-      sortChange: "当表格排序发生变化时触发",
-      pageChange: "当分页发生变化时触发",
-      selectionChange: "当选择的行发生变化时触发",
-      rowHover: "当鼠标悬停在行上时触发",
-      actionClick: "当点击操作列按钮时触发"
-    };
-    return descriptions[type] || "";
-  };
+  const getEventTypeLabel = (type: string) => eventTypeLabels[type] || type;
+  const getEventDescription = (type: string) => eventTypeDescriptions[type] || "";
   
   // 保存代码编辑器中的脚本
   const saveCode = () => {
@@ -1897,13 +2069,6 @@ function EventsPanel({
         return null;
     }
   };
-  const eventTypesByComp: Record<string, string[]> = {
-    Button: ["click", "hover", "keydown"],
-    Input: ["change", "keydown"],
-    Table: ["rowClick", "rowSelect", "rowDoubleClick", "cellClick", "headerClick", "sortChange", "pageChange", "selectionChange", "rowHover", "actionClick"],
-    default: ["click", "hover"],
-  };
-
   // 监听代码编辑器打开事件（Hooks 必须在所有条件返回之前）
   useEffect(() => {
     const unsubscribe = bus.subscribe('codeEditor.open', (payload: any) => {
@@ -1924,6 +2089,7 @@ function EventsPanel({
   };
 
   const events: any[] = Array.isArray(selected.props?.events) ? selected.props!.events : [];
+  const availableEventTypes = getAvailableEventTypesByComponent(selected.type);
 
   const openCodeEditor = (field: string, currentValue: string) => {
     setEditingField(field);
@@ -1937,6 +2103,28 @@ function EventsPanel({
 
   return (
     <div className="space-y-3 p-4">
+      <div className="rounded-md border bg-muted/30 p-3">
+        <div className="text-xs font-medium">事件设计建议</div>
+        <div className="mt-1 text-xs text-muted-foreground">
+          当前组件推荐优先配置：{availableEventTypes.map((t) => getEventTypeLabel(t)).join("、")}
+        </div>
+        <div className="mt-2 flex flex-wrap gap-1">
+          {availableEventTypes
+            .filter((type) => !(events || []).some((ev) => ev?.type === type))
+            .slice(0, 6)
+            .map((type) => (
+              <Button
+                key={type}
+                size="sm"
+                variant="outline"
+                className="h-6 px-2 text-[11px]"
+                onClick={() => set("events", [...events, { type, handler: handlers[0] }])}
+              >
+                + {getEventTypeLabel(type)}
+              </Button>
+            ))}
+        </div>
+      </div>
       {selected.type === "Button" && (
         <div className="grid gap-2">
           <label className="text-xs">点击发布事件（pubsub）</label>
@@ -1978,7 +2166,7 @@ function EventsPanel({
                     <SelectValue placeholder="选择事件类型" />
                   </SelectTrigger>
                   <SelectContent>
-                    {(eventTypesByComp[selected.type] || eventTypesByComp.default).map((t) => (
+                    {availableEventTypes.map((t) => (
                       <SelectItem key={t} value={t}>
                         {getEventTypeLabel(t)}
                       </SelectItem>
@@ -2732,7 +2920,7 @@ function EventsPanel({
           <Button
             size="sm"
             variant="secondary"
-            onClick={() => set("events", [...events, { type: (eventTypesByComp[selected.type] || eventTypesByComp.default)[0], handler: handlers[0] }])}
+            onClick={() => set("events", [...events, { type: availableEventTypes[0], handler: handlers[0] }])}
           >
             添加事件订阅
           </Button>
@@ -3171,6 +3359,21 @@ function Inspector({
       </div>
       
       <div className="flex-1 min-h-0 overflow-y-auto">
+        <div className="mb-3 rounded-md border bg-muted/30 p-3">
+          <div className="text-xs font-medium">属性面板建议</div>
+          <div className="mt-1 text-xs text-muted-foreground">
+            {categoryGuides[getComponentCategory(local.type)].summary}
+          </div>
+          <div className="mt-1 text-xs text-muted-foreground">
+            推荐先配置：{categoryGuides[getComponentCategory(local.type)].propTips.join("、")}
+          </div>
+          <div className="mt-1 text-xs text-muted-foreground">
+            组件关键属性：{(componentPropHints[local.type] || categoryGuides[getComponentCategory(local.type)].propTips).join("、")}
+          </div>
+          <div className="mt-1 text-xs text-muted-foreground">
+            建议联动事件：{categoryGuides[getComponentCategory(local.type)].recommendedEvents.map((t) => eventTypeLabels[t] || t).join("、")}
+          </div>
+        </div>
         <Accordion type="multiple" className="w-full" defaultValue={local.type === "DatePicker" ? ["basic", "style", "datepicker-config", "datepicker-advanced"] : ["basic", "style"]}>
         <AccordionItem value="basic">
           <AccordionTrigger className="text-sm font-medium">
@@ -3984,6 +4187,135 @@ function Inspector({
           </AccordionItem>
         )}
         
+        {local.type === "Chart" && (
+          <AccordionItem value="chart-config">
+            <AccordionTrigger className="text-sm font-medium">
+              图表配置
+            </AccordionTrigger>
+            <AccordionContent className="space-y-3">
+              <div className="grid gap-2">
+                <label className="text-xs">标题</label>
+                <Input value={local.props?.title ?? ""} onChange={(e) => set("title", e.target.value)} placeholder="销售趋势" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="grid gap-2">
+                  <label className="text-xs">图表类型</label>
+                  <Select value={local.props?.chartType ?? "line"} onValueChange={(v) => set("chartType", v)}>
+                    <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="line">折线图</SelectItem>
+                      <SelectItem value="bar">柱状图</SelectItem>
+                      <SelectItem value="area">面积图</SelectItem>
+                      <SelectItem value="pie">饼图</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-xs">图表高度(px)</label>
+                  <Input type="number" value={local.props?.height ?? 320} onChange={(e) => set("height", Number(e.target.value || 320))} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="grid gap-2">
+                  <label className="text-xs">X 轴字段</label>
+                  <Input value={local.props?.xField ?? "name"} onChange={(e) => set("xField", e.target.value)} placeholder="name" />
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-xs">调色板(JSON)</label>
+                  <Input value={JSON.stringify(local.props?.palette ?? ["#3b82f6", "#10b981", "#f59e0b"])} onChange={(e) => {
+                    try { set("palette", JSON.parse(e.target.value)); } catch {}
+                  }} placeholder='["#3b82f6","#10b981"]' />
+                </div>
+              </div>
+
+              <div className="grid gap-2">
+                <label className="text-xs">系列配置(JSON)</label>
+                <Textarea
+                  rows={4}
+                  value={getJsonInputValue("series", [{ key: "value", name: "数值", type: local.props?.chartType ?? "line", color: "#3b82f6" }])}
+                  onChange={(e) => handleJsonInput("series", e.target.value, [{ key: "value", name: "数值", type: local.props?.chartType ?? "line", color: "#3b82f6" }])}
+                  placeholder='[{"key":"value","name":"销售额","type":"bar","color":"#3b82f6"}]'
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <label className="text-xs">数据源</label>
+                <Select value={local.props?.dataSource ?? "static"} onValueChange={(v) => set("dataSource", v)}>
+                  <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="static">静态</SelectItem>
+                    <SelectItem value="url">接口 URL</SelectItem>
+                    <SelectItem value="topic">事件主题</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {local.props?.dataSource === "url" && (
+                <div className="grid gap-2">
+                  <label className="text-xs">URL</label>
+                  <Input value={local.props?.url ?? ""} onChange={(e) => set("url", e.target.value)} placeholder="/api/chart-data" />
+                </div>
+              )}
+              {local.props?.dataSource === "topic" && (
+                <div className="grid gap-2">
+                  <label className="text-xs">订阅主题</label>
+                  <Input value={local.props?.topic ?? ""} onChange={(e) => set("topic", e.target.value)} placeholder="chart.data" />
+                </div>
+              )}
+              {(local.props?.dataSource ?? "static") === "static" && (
+                <div className="grid gap-2">
+                  <label className="text-xs">静态数据 JSON(Array)</label>
+                  <Textarea
+                    rows={6}
+                    value={getJsonInputValue("data", [
+                      { name: "一月", value: 120, uv: 80 },
+                      { name: "二月", value: 200, uv: 150 },
+                      { name: "三月", value: 160, uv: 120 }
+                    ])}
+                    onChange={(e) => handleJsonInput("data", e.target.value, [
+                      { name: "一月", value: 120, uv: 80 },
+                      { name: "二月", value: 200, uv: 150 },
+                      { name: "三月", value: 160, uv: 120 }
+                    ])}
+                  />
+                </div>
+              )}
+
+              <Separator />
+              <div className="space-y-2">
+                <div className="text-xs font-medium">可视化选项</div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="flex items-center gap-2">
+                    <Switch id="chartShowGrid" checked={local.props?.showGrid !== false} onCheckedChange={(checked) => set("showGrid", checked)} />
+                    <label htmlFor="chartShowGrid" className="text-xs">显示网格</label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Switch id="chartShowLegend" checked={local.props?.showLegend !== false} onCheckedChange={(checked) => set("showLegend", checked)} />
+                    <label htmlFor="chartShowLegend" className="text-xs">显示图例</label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Switch id="chartShowTooltip" checked={local.props?.showTooltip !== false} onCheckedChange={(checked) => set("showTooltip", checked)} />
+                    <label htmlFor="chartShowTooltip" className="text-xs">显示提示</label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Switch id="chartSmooth" checked={local.props?.smooth === true} onCheckedChange={(checked) => set("smooth", checked)} />
+                    <label htmlFor="chartSmooth" className="text-xs">曲线平滑</label>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-2">
+                <label className="text-xs">高级 Option(JSON，会与可视化选项动态合并)</label>
+                <Textarea
+                  rows={4}
+                  value={getJsonInputValue("option", {})}
+                  onChange={(e) => handleJsonInput("option", e.target.value, {})}
+                  placeholder='{"margin":{"top":8,"right":16,"bottom":8,"left":0}}'
+                />
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        )}
+
         {local.type === "Table" && (
           <AccordionItem value="table-config">
             <AccordionTrigger className="text-sm font-medium">
@@ -8175,6 +8507,7 @@ setText("操作按钮点击事件触发！行ID: " + (payload.row?.id || "未知
     { key: "Separator", label: "分割线" },
     { key: "Avatar", label: "头像" },
     { key: "Progress", label: "进度条" },
+    { key: "Chart", label: "图表" },
     { key: "Link", label: "链接" },
     { key: "Image", label: "图片" },
     { key: "Upload", label: "文件上传" },
@@ -8223,6 +8556,7 @@ setText("操作按钮点击事件触发！行ID: " + (payload.row?.id || "未知
     Badge: "fas fa-tag",
     Avatar: "fas fa-user-circle",
     Progress: "fas fa-chart-line",
+    Chart: "fas fa-chart-area",
     Skeleton: "fas fa-spinner",
     Table: "fas fa-table",
     EditableTable: "fas fa-edit",
@@ -8308,6 +8642,7 @@ setText("操作按钮点击事件触发！行ID: " + (payload.row?.id || "未知
       { key: "Badge", label: "徽章" },
       { key: "Avatar", label: "头像" },
       { key: "Progress", label: "进度条" },
+      { key: "Chart", label: "图表" },
       { key: "Link", label: "链接" },
       { key: "Image", label: "图片" },
       { key: "Skeleton", label: "骨架屏" },

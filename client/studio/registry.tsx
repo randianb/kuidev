@@ -64,6 +64,7 @@ import { DraggableTableHeader } from "./components/draggable-table-header";
 import { QueryBuilderDialog } from "@/components/ui/query-builder-dialog";
 import { ScenarioSelector } from "@/components/ui/scenario-selector";
 import { ScenarioManager } from "@/components/ui/query-builder/ScenarioManager";
+import { ResponsiveContainer, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, Legend as RechartsLegend, LineChart, Line, BarChart, Bar, AreaChart, Area, PieChart, Pie, Cell } from "recharts";
 
 // 页面内容渲染组件
 // 递归渲染页面内容的组件
@@ -1906,6 +1907,194 @@ export const registry: Record<string, Renderer> = {
             {error}
           </div>
         )}
+      </div>
+    );
+  },
+  Chart: (node) => {
+    const defaultData = [
+      { name: "一月", value: 120, uv: 80 },
+      { name: "二月", value: 200, uv: 150 },
+      { name: "三月", value: 160, uv: 120 },
+      { name: "四月", value: 260, uv: 220 },
+    ];
+
+    const [rows, setRows] = useState<any[]>(() => {
+      if (node.props?.dataSource === "static") {
+        return Array.isArray(node.props?.data) ? node.props.data : defaultData;
+      }
+      return Array.isArray(node.props?.data) ? node.props.data : [];
+    });
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const chartType = node.props?.chartType || "line";
+    const xField = node.props?.xField || "name";
+    const showGrid = node.props?.showGrid !== false;
+    const showLegend = node.props?.showLegend !== false;
+    const showTooltip = node.props?.showTooltip !== false;
+    const smooth = node.props?.smooth === true;
+    const chartHeight = Number(node.props?.height ?? 320);
+    const palette: string[] = Array.isArray(node.props?.palette) && node.props.palette.length > 0
+      ? node.props.palette
+      : ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"];
+
+    const series = useMemo(() => {
+      if (Array.isArray(node.props?.series) && node.props.series.length > 0) {
+        return node.props.series.map((item: any, index: number) => ({
+          key: item?.key || "value",
+          name: item?.name || item?.key || `系列${index + 1}`,
+          type: item?.type || chartType,
+          color: item?.color || palette[index % palette.length],
+          stackId: item?.stackId,
+        }));
+      }
+      return [{ key: "value", name: "数值", type: chartType, color: palette[0] }];
+    }, [node.props?.series, chartType, palette]);
+
+    const mergedOption = useMemo(() => {
+      const custom = (node.props?.option && typeof node.props.option === "object") ? node.props.option : {};
+      return {
+        chartType,
+        xField,
+        showGrid,
+        showLegend,
+        showTooltip,
+        smooth,
+        palette,
+        series,
+        ...custom,
+      };
+    }, [chartType, xField, showGrid, showLegend, showTooltip, smooth, palette, series, node.props?.option]);
+
+    const activeData = rows.length > 0 ? rows : defaultData;
+
+    const triggerChartEvents = (eventType: string, payload: any) => {
+      const events: any[] = Array.isArray(node.props?.events) ? node.props.events : [];
+      events.forEach((ev) => {
+        if ((ev?.type === eventType || (eventType === "dataPointClick" && ev?.type === "click")) && ev?.handler) {
+          execHandler(ev.handler, payload);
+        }
+      });
+    };
+
+    useEffect(() => {
+      if ((node.props?.dataSource ?? "static") === "static") {
+        setRows(Array.isArray(node.props?.data) ? node.props.data : defaultData);
+        setError(null);
+        setLoading(false);
+        return;
+      }
+
+      if (node.props?.dataSource === "url" && node.props?.url) {
+        setLoading(true);
+        setError(null);
+        fetch(node.props.url)
+          .then((r) => {
+            if (!r.ok) throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+            return r.json();
+          })
+          .then((d) => {
+            const arr = Array.isArray(d) ? d : d?.data ?? [];
+            setRows(Array.isArray(arr) ? arr : []);
+          })
+          .catch((err) => {
+            setRows([]);
+            setError(err?.message || "图表数据加载失败");
+          })
+          .finally(() => setLoading(false));
+        return;
+      }
+
+      if (node.props?.dataSource === "topic" && node.props?.topic) {
+        const unsub = bus.subscribe(String(node.props.topic), (data) => {
+          const arr = Array.isArray(data) ? data : data?.data ?? [];
+          setRows(Array.isArray(arr) ? arr : []);
+          setError(null);
+        });
+        return () => unsub();
+      }
+    }, [node.props?.dataSource, node.props?.url, node.props?.topic, node.props?.data]);
+
+    const renderCartesianSeries = () => (
+      <>
+        {series.map((s: any) => {
+          const commonProps: any = {
+            key: `${s.type}-${s.key}`,
+            dataKey: s.key,
+            name: s.name,
+            stroke: s.color,
+            fill: s.color,
+            stackId: s.stackId,
+            onClick: (payload: any) => triggerChartEvents("dataPointClick", { nodeId: node.id, payload, series: s, option: mergedOption }),
+          };
+
+          if (s.type === "bar") {
+            return <Bar {...commonProps} radius={[4, 4, 0, 0]} />;
+          }
+          if (s.type === "area") {
+            return <Area {...commonProps} fillOpacity={0.2} type={smooth ? "monotone" : "linear"} />;
+          }
+          return <Line {...commonProps} strokeWidth={2} dot={{ r: 3 }} type={smooth ? "monotone" : "linear"} />;
+        })}
+      </>
+    );
+
+    const renderChart = () => {
+      if (chartType === "pie") {
+        const pieSeries = series[0] || { key: "value", name: "数值", color: palette[0] };
+        return (
+          <PieChart>
+            {showTooltip && <RechartsTooltip />}
+            {showLegend && <RechartsLegend />}
+            <Pie
+              data={activeData}
+              nameKey={xField}
+              dataKey={pieSeries.key}
+              outerRadius={Number(mergedOption?.outerRadius ?? node.props?.outerRadius ?? 110)}
+              label={node.props?.showPieLabel !== false}
+              onClick={(payload) => triggerChartEvents("dataPointClick", { nodeId: node.id, payload, series: pieSeries, option: mergedOption })}
+            >
+              {activeData.map((_: any, index: number) => (
+                <Cell key={`cell-${index}`} fill={palette[index % palette.length]} />
+              ))}
+            </Pie>
+          </PieChart>
+        );
+      }
+
+      const common = (
+        <>
+          {showGrid && <CartesianGrid strokeDasharray="3 3" />}
+          <XAxis dataKey={xField} />
+          <YAxis />
+          {showTooltip && <RechartsTooltip />}
+          {showLegend && <RechartsLegend />}
+          {renderCartesianSeries()}
+        </>
+      );
+
+      if (chartType === "bar") return <BarChart data={activeData} margin={mergedOption?.margin}>{common}</BarChart>;
+      if (chartType === "area") return <AreaChart data={activeData} margin={mergedOption?.margin}>{common}</AreaChart>;
+      return <LineChart data={activeData} margin={mergedOption?.margin}>{common}</LineChart>;
+    };
+
+    return (
+      <div className={cn("w-full rounded-md border p-3", node.props?.className)} style={node.style}>
+        <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
+          <span>{node.props?.title || "图表"}</span>
+          <span>{chartType.toUpperCase()} · {activeData.length} 条</span>
+        </div>
+        <div style={{ width: "100%", height: chartHeight }}>
+          {loading ? (
+            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">加载中...</div>
+          ) : error ? (
+            <div className="flex h-full items-center justify-center text-sm text-destructive">{error}</div>
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              {renderChart()}
+            </ResponsiveContainer>
+          )}
+        </div>
       </div>
     );
   },
