@@ -165,6 +165,7 @@ export type Renderer = (
     moveAsChild?: (dragId: string, parentId: string) => void;
     createChild?: (parentId: string, type: string) => void;
     createCustomChild?: (parentId: string, customComponent: any) => void;
+    createScadaChild?: (parentId: string, stencilKey: string) => void;
     rootNode?: NodeMeta; // 用于锁定检查
     onPanelSizeChange?: (nodeId: string, sizes: number[]) => void; // 分栏大小变化回调
     onCopy?: (nodeId: string) => void; // 复制组件
@@ -3647,6 +3648,8 @@ export const registry: Record<string, Renderer> = {
         ))}
       </NavigationControls>
     ),
+
+
 };
 
 export function NodeRenderer({ node, ctx }: { node: NodeMeta; ctx: any }) {
@@ -3715,12 +3718,12 @@ export function NodeRenderer({ node, ctx }: { node: NodeMeta; ctx: any }) {
       targetNodeType: node.type,
       isDroppable: droppable,
       dataTransferTypes: types,
-      willSetOver: droppable && (types.includes("application/x-move") || types.includes("application/x-node") || types.includes("application/x-custom-component"))
+      willSetOver: droppable && (types.includes("application/x-move") || types.includes("application/x-node") || types.includes("application/x-custom-component") || types.includes("application/x-scada-symbol"))
     });
-    if (droppable && (types.includes("application/x-move") || types.includes("application/x-node") || types.includes("application/x-custom-component"))) {
+    if (droppable && (types.includes("application/x-move") || types.includes("application/x-node") || types.includes("application/x-custom-component") || types.includes("application/x-scada-symbol"))) {
       setOver(true);
     }
-    if (types.includes("application/x-move") || types.includes("application/x-node") || types.includes("application/x-custom-component")) {
+    if (types.includes("application/x-move") || types.includes("application/x-node") || types.includes("application/x-custom-component") || types.includes("application/x-scada-symbol")) {
       bus.publish("dnd.log", { action: "enter", id: node.id });
     }
   };
@@ -3746,7 +3749,7 @@ export function NodeRenderer({ node, ctx }: { node: NodeMeta; ctx: any }) {
 
   const handleDragOver = (e: React.DragEvent) => {
     const types = Array.from(e.dataTransfer.types);
-    const canDrop = droppable && (types.includes("application/x-move") || types.includes("application/x-node") || types.includes("application/x-custom-component"));
+    const canDrop = droppable && (types.includes("application/x-move") || types.includes("application/x-node") || types.includes("application/x-custom-component") || types.includes("application/x-scada-symbol"));
     console.log("🔄 [拖拽悬停]", {
       targetNodeId: node.id,
       targetNodeType: node.type,
@@ -3925,6 +3928,32 @@ export function NodeRenderer({ node, ctx }: { node: NodeMeta; ctx: any }) {
       }
     }
     
+    if (types.includes("application/x-scada-symbol")) {
+      const raw = e.dataTransfer.getData("application/x-scada-symbol");
+      console.log("🧩 [创建组态元件]", { rawData: raw });
+      try {
+        const { key } = JSON.parse(raw || "{}");
+        if (key) {
+          if (node.locked === true || (ctx.rootNode && isNodeInLockedContainer(node.id, ctx.rootNode))) {
+            console.log("❌ [创建组态元件失败] 目标容器已锁定或在锁定容器内", { targetNodeId: node.id, stencilKey: key, locked: node.locked });
+            return;
+          }
+
+          e.preventDefault();
+          e.stopPropagation();
+          bus.publish("dnd.log", { action: "drop-create-scada", key, to: node.id });
+
+          if (ctx.createScadaChild) {
+            ctx.createScadaChild(node.id, String(key));
+          } else {
+            console.log("❌ [createScadaChild函数不存在]");
+          }
+        }
+      } catch (error) {
+        console.log("❌ [创建组态元件失败] JSON解析错误", { error, rawData: raw });
+      }
+    }
+
     console.log("📦 [拖拽放置结束]");
   };
 

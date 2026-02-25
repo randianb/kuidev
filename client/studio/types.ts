@@ -94,7 +94,7 @@ export interface NodeMeta {
   padding?: SpacingConfig; // 内边距配置
 }
 
-export type TemplateKind = "blank" | "content" | "vscode" | "landing" | "email" | "home" | "admin" | "grid" | "dashboard";
+export type TemplateKind = "blank" | "content" | "vscode" | "landing" | "email" | "home" | "admin" | "grid" | "dashboard" | "scada2d" | "scada-engine-assembly" | "scada-auto-assembly" | "scada-casting" | "scada-machining";
 
 // 页面事件类型定义
 export interface PageEvents {
@@ -328,6 +328,158 @@ export function createPage(name: string, template: TemplateKind): PageMeta {
           createNode("GridItem", { props: { title: "统计卡片 4", span: 3, smSpan: 6, mdSpan: 4 } }),
           createNode("GridItem", { props: { title: "图表区域", span: 8, smSpan: 12, mdSpan: 8 } }),
           createNode("GridItem", { props: { title: "侧边信息", span: 4, smSpan: 12, mdSpan: 4 } }),
+        ],
+      }),
+    ];
+  } else if (template === "scada2d") {
+    root.layout = "col";
+    root.children = [
+      createNode("Container", {
+        layout: "row",
+        props: { title: "SCADA 顶部状态栏", className: "h-[56px] min-h-[56px] bg-slate-900 text-slate-100 border-b border-slate-700" },
+        children: [
+          createNode("Badge", { props: { text: "SCADA · 2D数字孪生" } }),
+          createNode("Label", { props: { text: "设备在线: 18 / 20" } }),
+          createNode("Label", { props: { text: "安灯状态: 2 条告警" } }),
+        ],
+      }),
+      createNode("Container", {
+        layout: "row",
+        props: { title: "SCADA 工作区", className: "min-h-[560px]" },
+        children: [
+          createNode("Container", {
+            layout: "col",
+            props: { title: "2D 组态画布", className: "min-h-[560px] bg-slate-950 text-slate-100 border border-slate-700" },
+            children: [
+              createNode("Image", { props: { src: "https://images.unsplash.com/photo-1565793298595-6a879b1d9492?q=80&w=1200&auto=format&fit=crop", alt: "工厂2D背景", className: "w-full h-[260px] object-cover opacity-80" } }),
+              createNode("Label", { props: { text: "动画层（可绑定旋转风机/流动箭头）", className: "animate-pulse text-cyan-300" } }),
+              createNode("Progress", { props: { value: 72 } }),
+            ],
+          }),
+          createNode("Container", {
+            layout: "col",
+            props: { title: "浮窗与告警区", className: "min-w-[320px] gap-2" },
+            children: [
+              createNode("Card", {
+                props: { title: "设备浮窗 A（可移动/可关闭逻辑）", description: "示例：电机状态" },
+                children: [
+                  createNode("Label", { props: { text: "温度: 86℃" } }),
+                  createNode("Label", { props: { text: "电压: 381V" } }),
+                  createNode("Progress", { props: { value: 78 } }),
+                ],
+              }),
+              createNode("Alert", {
+                props: {
+                  title: "高温告警",
+                  description: "3# 线温度超过阈值，请检查冷却系统（安灯：红）",
+                  variant: "destructive",
+                },
+              }),
+              createNode("Badge", { props: { text: "安灯提示：产线 B 待处理" } }),
+            ],
+          }),
+        ],
+      }),
+    ];
+  } else if (template === "scada-engine-assembly") {
+    root.layout = "col";
+    root.children = [
+      createNode("Container", {
+        layout: "row",
+        props: { title: "发动机装配车间 · 看板", className: "h-[56px] min-h-[56px] bg-slate-900 text-slate-100 border-b border-slate-700" },
+        children: [
+          createNode("Badge", { props: { text: "发动机装配" } }),
+          createNode("Label", { props: { text: "线体节拍: 65s" } }),
+          createNode("Label", { props: { text: "安灯: 1条告警" } }),
+        ],
+      }),
+      createNode("Container", {
+        layout: "row",
+        props: { title: "工艺区", className: "min-h-[560px]" },
+        children: [
+          createNode("Container", {
+            layout: "col",
+            props: { title: "主装配线", className: "min-h-[560px] bg-slate-950 text-slate-100" },
+            children: [
+              createNode("Label", { props: { text: "工位: 缸体上线 / 曲轴安装 / 气门机构 / 冷试" } }),
+              createNode("Progress", { props: { value: 68 } }),
+            ],
+          }),
+          createNode("Container", {
+            layout: "col",
+            props: { title: "质量与告警", className: "min-w-[340px] gap-2" },
+            children: [
+              createNode("Card", { props: { title: "扭矩合格率", description: "当班统计" }, children: [createNode("Label", { props: { text: "99.2%" } })] }),
+              createNode("Alert", { props: { title: "拧紧枪告警", description: "工位4扭矩偏差超限", variant: "destructive" } }),
+            ],
+          }),
+        ],
+      }),
+    ];
+  } else if (template === "scada-auto-assembly") {
+    root.layout = "col";
+    root.children = [
+      createNode("Container", {
+        layout: "row",
+        props: { title: "汽车总装车间 · 看板", className: "h-[56px] min-h-[56px] bg-slate-900 text-slate-100 border-b border-slate-700" },
+        children: [
+          createNode("Badge", { props: { text: "总装" } }),
+          createNode("Label", { props: { text: "车型: SUV-A" } }),
+          createNode("Label", { props: { text: "班次产量: 128" } }),
+        ],
+      }),
+      createNode("Grid", {
+        props: { title: "总装工艺段", cols: 12, gap: 4, responsive: true },
+        children: [
+          createNode("GridItem", { props: { title: "内饰装配", span: 4 } }),
+          createNode("GridItem", { props: { title: "底盘合装", span: 4 } }),
+          createNode("GridItem", { props: { title: "电检/路试", span: 4 } }),
+          createNode("GridItem", { props: { title: "AGV配送", span: 6 } }),
+          createNode("GridItem", { props: { title: "安灯与异常处理", span: 6 } }),
+        ],
+      }),
+    ];
+  } else if (template === "scada-casting") {
+    root.layout = "col";
+    root.children = [
+      createNode("Container", {
+        layout: "row",
+        props: { title: "铸造车间 · 过程监控", className: "h-[56px] min-h-[56px] bg-slate-900 text-slate-100 border-b border-slate-700" },
+        children: [
+          createNode("Badge", { props: { text: "铸造" } }),
+          createNode("Label", { props: { text: "熔炉温度: 712℃" } }),
+          createNode("Label", { props: { text: "压铸机在线: 6/7" } }),
+        ],
+      }),
+      createNode("Container", {
+        layout: "row",
+        props: { title: "熔炼-压铸-冷却", className: "min-h-[560px]" },
+        children: [
+          createNode("Container", { layout: "col", props: { title: "熔炼区" }, children: [createNode("Label", { props: { text: "锅炉/熔炉联动" } }), createNode("Progress", { props: { value: 74 } })] }),
+          createNode("Container", { layout: "col", props: { title: "压铸区" }, children: [createNode("Label", { props: { text: "压铸周期: 78s" } }), createNode("Label", { props: { text: "模温: 220℃" } })] }),
+          createNode("Container", { layout: "col", props: { title: "冷却与后处理" }, children: [createNode("Label", { props: { text: "冷却水温: 29℃" } }), createNode("Alert", { props: { title: "喷淋压力偏低", description: "请检查喷嘴堵塞", variant: "destructive" } })] }),
+        ],
+      }),
+    ];
+  } else if (template === "scada-machining") {
+    root.layout = "col";
+    root.children = [
+      createNode("Container", {
+        layout: "row",
+        props: { title: "机加车间 · 设备监控", className: "h-[56px] min-h-[56px] bg-slate-900 text-slate-100 border-b border-slate-700" },
+        children: [
+          createNode("Badge", { props: { text: "机加" } }),
+          createNode("Label", { props: { text: "机床在线: 24/26" } }),
+          createNode("Label", { props: { text: "刀具预警: 3" } }),
+        ],
+      }),
+      createNode("Grid", {
+        props: { title: "机加单元", cols: 12, gap: 4, responsive: true },
+        children: [
+          createNode("GridItem", { props: { title: "切削机群", span: 8 } }),
+          createNode("GridItem", { props: { title: "刀具寿命监控", span: 4 } }),
+          createNode("GridItem", { props: { title: "压检工位", span: 6 } }),
+          createNode("GridItem", { props: { title: "质量追溯", span: 6 } }),
         ],
       }),
     ];
